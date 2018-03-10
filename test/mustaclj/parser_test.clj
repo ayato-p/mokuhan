@@ -4,38 +4,94 @@
 
 (t/deftest parse-variables-test
   (t/testing "escaped variables"
+    (t/is
+     (= [[:escaped-variable [:name "x"]]]
+        (sut/parse "{{x}}")
+        (sut/parse "{{ x }}")
+        (sut/parse "{{\tx\t}}")
+        (sut/parse "{{\nx\n}}")))
+
+    (t/is
+     (= [[:escaped-variable [:name "x" "y"]]]
+        (sut/parse "{{x.y}}")
+        (sut/parse "{{ x.y }}")
+        (sut/parse "{{\tx.y\t}}")
+        (sut/parse "{{\nx.y\n}}")))
+
+
     (t/are [src expected] (= expected (sut/parse src))
-      "{{x}}"
-      [[:escaped-variable [:open-delimiter "{{"] [:name "x"] [:close-delimiter "}}"]]]
-
-      "{{ x }}"
-      [[:escaped-variable [:open-delimiter "{{"] " " [:name "x"] " " [:close-delimiter "}}"]]]
-
       " {{ x }} "
-      [" " [:escaped-variable [:open-delimiter "{{"] " " [:name "x"] " " [:close-delimiter "}}"]] " "]
+      [[:text " "] [:escaped-variable [:name "x"]] [:text " "]]
 
       "--{{x}}--"
-      ["--" [:escaped-variable [:open-delimiter "{{"] [:name "x"] [:close-delimiter "}}"]] "--"]
+      [[:text "--"] [:escaped-variable [:name "x"]] [:text "--"]]
 
       "}}{{x}}--"
-      ["}}" [:escaped-variable [:open-delimiter "{{"] [:name "x"] [:close-delimiter "}}"]] "--"]
+      [[:text "}}"] [:escaped-variable [:name "x"]] [:text "--"]]
 
-      "{{\nx\n}}"
-      [[:escaped-variable [:open-delimiter "{{"] "\n" [:name "x"] "\n" [:close-delimiter "}}"]]]))
+      "--{{x}}{{"
+      [[:text "--"] [:escaped-variable [:name "x"]] [:text "{{"]]
+
+      "{{x}}}"
+      [[:escaped-variable [:name "x"]] [:text "}"]]
+
+      "{{{x}}"
+      [[:text "{"] [:escaped-variable [:name "x"]]]
+
+      "{{{{x}}}}"
+      [[:text "{"] [:unescaped-variable [:name "x"]] [:text "}"]]))
 
   (t/testing "unescaped variables"
-    (t/are [src expected] (= expected (sut/parse src))
-      "{{{x}}}"
-      [[:unescaped-variable [:open-triple-mustache "{{{"] [:name "x"] [:close-triple-mustache "}}}"]]]
+    (t/is
+     (= [[:unescaped-variable [:name "x"]]]
+        (sut/parse "{{{x}}}")
+        (sut/parse "{{{ x }}}")
+        (sut/parse "{{{\tx\t}}}")
+        (sut/parse "{{{\nx\n}}}")))
 
-      "{{{ x }}}"
-      [[:unescaped-variable [:open-triple-mustache "{{{"] " " [:name "x"] " " [:close-triple-mustache "}}}"]]]
+    (t/is
+     (= [[:unescaped-variable [:name "x" "y"]]]
+        (sut/parse "{{{x.y}}}")
+        (sut/parse "{{{ x.y }}}")
+        (sut/parse "{{{\tx.y\t}}}")
+        (sut/parse "{{{\nx.y\n}}}")))
 
-      "{{&x}}"
-      [[:unescaped-variable [:open-delimiter "{{"] "&" [:name "x"] [:close-delimiter "}}"]]]
+    (t/is
+     (= [[:unescaped-variable [:name "x"]]]
+        (sut/parse "{{&x}}")
+        (sut/parse "{{& x }}")
+        (sut/parse "{{&\tx\t}}")
+        (sut/parse "{{&\nx\n}}")))
 
-      "{{& x }}"
-      [[:unescaped-variable [:open-delimiter "{{"] "&" " " [:name "x"] " " [:close-delimiter "}}"]]])))
+    (t/is
+     (= [[:unescaped-variable [:name "x" "y"]]]
+        (sut/parse "{{&x.y}}")
+        (sut/parse "{{& x.y }}")
+        (sut/parse "{{&\tx.y\t}}")
+        (sut/parse "{{&\nx.y\n}}")))
+
+    (t/is
+     (= [[:text " "] [:unescaped-variable [:name "x"]] [:text " "]]
+        (sut/parse " {{{x}}} ")
+        (sut/parse " {{&x}} ")))
+
+    (t/is
+     (= [[:text "--"] [:unescaped-variable [:name "x"]] [:text "--"]]
+        (sut/parse "--{{{x}}}--")
+        (sut/parse "--{{&x}}--")))
+
+    (t/is
+     (= [[:text "{"] [:unescaped-variable [:name "x"]] [:text "}"]]
+        (sut/parse "{{{{x}}}}")))
+
+    (t/is
+     (= [[:unescaped-variable [:name "&x"]]]
+        (sut/parse "{{{ &x }}}")
+        (sut/parse "{{{&x }}}")))
+
+    (t/is
+     (= [[:text "{"] [:unescaped-variable [:name "x"]] [:text "}"]]
+        (sut/parse "{{{& x }}}")))))
 
 (t/deftest parse-name-test
   (letfn [(find-name [vec-or-any]
@@ -55,172 +111,152 @@
 
     (t/testing "dotted name"
       (t/are [src expected] (= expected (find-name (sut/parse src)))
-        "{{x.y}}" [:name "x" "." [:name "y"]]
-        " {{x.y}} " [:name "x" "." [:name "y"]]
-        "{{ x.y }}" [:name "x" "." [:name "y"]]
-        "{{x.y.z}}" [:name "x" "." [:name "y" "." [:name "z"]]]
-        "{{\n\nx.y.z\n\n}}" [:name "x" "." [:name "y" "." [:name "z"]]]))
+        "{{x.y}}" [:name "x" "y"]
+        " {{x.y}} " [:name "x" "y"]
+        "{{ x.y }}" [:name "x" "y"]
+        "{{x.y.z}}" [:name "x" "y" "z"]
+        "{{\n\nx.y.z\n\n}}" [:name "x" "y" "z"]))
 
     (t/testing "illegal names"
       (t/are [src expected] (= expected (sut/parse src))
-        "{{.x}}" ["{{.x}}"]
-        "{{x.}}" ["{{x.}}"]
-        "{{.x.}}" ["{{.x.}}"]
-        "{{x . y}}" ["{{x . y}}"]
-        "{{x. y}}" ["{{x. y}}"]
-        "{{x .y}}" ["{{x .y}}"]
-        "{{x}} {{.y}}" [[:escaped-variable [:open-delimiter "{{"] [:name "x"] [:close-delimiter "}}"]]
-                        " "
-                        "{{.y}}"]
-        "{{.x}} {{y}}" ["{{.x}} "
-                        [:escaped-variable [:open-delimiter "{{"] [:name "y"] [:close-delimiter "}}"]]]
-        "{{x}} {{.y}} {{z}}" [[:escaped-variable [:open-delimiter "{{"] [:name "x"] [:close-delimiter "}}"]]
-                              " "
-                              "{{.y}} "
-                              [:escaped-variable [:open-delimiter "{{"] [:name "z"] [:close-delimiter "}}"]]]
-        "{{.x}} {{y}} {{.z}}" ["{{.x}} "
-                               [:escaped-variable [:open-delimiter "{{"] [:name "y"] [:close-delimiter "}}"]]
-                               " "
-                               "{{.z}}"]))))
-
+        "{{.x}}" [[:text "{{.x}}"]]
+        "{{x.}}" [[:text "{{x.}}"]]
+        "{{.x.}}" [[:text "{{.x.}}"]]
+        "{{x . y}}" [[:text "{{x . y}}"]]
+        "{{x. y}}" [[:text "{{x. y}}"]]
+        "{{x .y}}" [[:text "{{x .y}}"]]
+        "{{x}} {{.y}}" [[:escaped-variable [:name "x"]]
+                        [:text  " "] [:text "{{.y}}"]]
+        "{{.x}} {{y}}" [[:text "{{.x}} "]
+                        [:escaped-variable [:name "y"]]]
+        "{{x}} {{.y}} {{z}}" [[:escaped-variable [:name "x"]]
+                              [:text " "]
+                              [:text "{{.y}} "]
+                              [:escaped-variable [:name "z"]]]
+        "{{.x}} {{y}} {{.z}}" [[:text "{{.x}} "]
+                               [:escaped-variable [:name "y"]]
+                               [:text " "]
+                               [:text "{{.z}}"]]))))
 
 (t/deftest parse-section-test
   (t/testing "standard section"
     (t/is
-     (= [[:section
-          [:open-section-tag [:open-delimiter "{{"] "#" [:name "x"] [:close-delimiter "}}"]]
-          [:close-section-tag [:open-delimiter "{{"] "/" [:name "x"] [:close-delimiter "}}"]]]]
+     (= [[:open-section [:name "x"]]
+         [:close-section [:name "x"]]]
         (sut/parse "{{#x}}{{/x}}")))
 
     (t/is
-     (= [[:section
-          [:open-section-tag [:open-delimiter "{{"] "#" [:name "x" "." [:name "y"]] [:close-delimiter "}}"]]
-          [:close-section-tag [:open-delimiter "{{"] "/" [:name "x" "." [:name "y"]] [:close-delimiter "}}"]]]]
+     (= [[:open-section [:name "x" "y"]]
+         [:close-section [:name "x" "y"]]]
         (sut/parse "{{#x.y}}{{/x.y}}")))
 
     (t/is
-     (= [[:section
-          [:open-section-tag [:open-delimiter "{{"] "#" [:name "x"] [:close-delimiter "}}"]]
-          [:close-section-tag [:open-delimiter "{{"] "/" [:name "y"] [:close-delimiter "}}"]]]]
+     (= [[:open-section [:name "x"]]
+         [:close-section [:name "y"]]]
         (sut/parse "{{#x}}{{/y}}")))
 
     (t/is
-     (= [[:section
-          [:open-section-tag [:open-delimiter "{{"] "#" [:name "x"] [:close-delimiter "}}"]]
-          [:section
-           [:open-section-tag [:open-delimiter "{{"] "#" [:name "y"] [:close-delimiter "}}"]]
-           [:close-section-tag [:open-delimiter "{{"] "/" [:name "y"] [:close-delimiter "}}"]]]
-          [:close-section-tag [:open-delimiter "{{"] "/" [:name "x"] [:close-delimiter "}}"]]]]
+     (= [[:open-section [:name "x"]]
+         [:open-section [:name "y"]]
+         [:close-section [:name "y"]]
+         [:close-section [:name "x"]]]
         (sut/parse "{{#x}}{{#y}}{{/y}}{{/x}}")))
 
     (t/is
-     (= [[:section
-          [:open-section-tag [:open-delimiter "{{"] "#" [:name "x"] [:close-delimiter "}}"]]
-          "{" "{"
-          [:close-section-tag [:open-delimiter "{{"] "/" [:name "x"] [:close-delimiter "}}"]]]]
+     (= [[:open-section [:name "x"]]
+         [:text "{"]
+         [:text "{"]
+         [:close-section [:name "x"]]]
         (sut/parse "{{#x}}{{{{/x}}")))
 
     (t/is
-     (= [[:section
-          [:open-section-tag [:open-delimiter "{{"] "#" [:name "x"] [:close-delimiter "}}"]]
-          "}}"
-          [:close-section-tag [:open-delimiter "{{"] "/" [:name "x"] [:close-delimiter "}}"]]]]
+     (= [[:open-section [:name "x"]]
+         [:text "}}"]
+         [:close-section [:name "x"]]]
         (sut/parse "{{#x}}}}{{/x}}"))))
 
   (t/testing "inverted section"
     (t/is
-     (= [[:inverted-section
-          [:open-inverted-section-tag [:open-delimiter "{{"] "^" [:name "x"] [:close-delimiter "}}"]]
-          [:close-section-tag [:open-delimiter "{{"] "/" [:name "x"] [:close-delimiter "}}"]]]]
+     (= [[:open-inverted-section [:name "x"]]
+         [:close-section [:name "x"]]]
         (sut/parse "{{^x}}{{/x}}")))
 
     (t/is
-     (= [[:inverted-section
-          [:open-inverted-section-tag [:open-delimiter "{{"] "^" [:name "x" "." [:name "y"]] [:close-delimiter "}}"]]
-          [:close-section-tag [:open-delimiter "{{"] "/" [:name "x" "." [:name "y"]] [:close-delimiter "}}"]]]]
+     (= [[:open-inverted-section [:name "x" "y"]]
+         [:close-section [:name "x" "y"]]]
         (sut/parse "{{^x.y}}{{/x.y}}")))
 
     (t/is
-     (= [[:section
-          [:open-section-tag [:open-delimiter "{{"] "#" [:name "x"] [:close-delimiter "}}"]]
-          [:close-section-tag [:open-delimiter "{{"] "/" [:name "y"] [:close-delimiter "}}"]]]]
+     (= [[:open-section [:name "x"]]
+         [:close-section [:name "y"]]]
         (sut/parse "{{#x}}{{/y}}"))))
 
   (t/testing "unopened section"
     (t/is
-     (= [[:unopened-section
-          [:close-section-tag [:open-delimiter "{{"] "/" [:name "x"] [:close-delimiter "}}"]]]]
+     (= [[:close-section [:name "x"]]]
         (sut/parse "{{/x}}")))
 
     (t/is
-     (= [[:escaped-variable
-          [:open-delimiter "{{"] [:name "x"] [:close-delimiter "}}"]]
-         [:unopened-section
-          [:close-section-tag [:open-delimiter "{{"] "/" [:name "x"] [:close-delimiter "}}"]]]]
+     (= [[:escaped-variable [:name "x"]]
+         [:close-section [:name "x"]]]
         (sut/parse "{{x}}{{/x}}"))))
 
   (t/testing "unclosed section"
     (t/is
-     (= [[:unclosed-section
-          [:open-section-tag [:open-delimiter "{{"] "#" [:name "x"] [:close-delimiter "}}"]]]]
+     (= [[:open-section [:name "x"]]]
         (sut/parse "{{#x}}")))
 
     (t/is
-     (= [[:unclosed-section
-          [:open-section-tag [:open-delimiter "{{"] "#" [:name "x"] [:close-delimiter "}}"]]
-          [:escaped-variable [:open-delimiter "{{"] [:name "x"] [:close-delimiter "}}"]]]]
+     (= [[:open-section [:name "x"]]
+         [:escaped-variable [:name "x"]]]
         (sut/parse "{{#x}}{{x}}")))
 
     (t/is
-     (= [[:unclosed-section
-          [:open-inverted-section-tag [:open-delimiter "{{"] "^" [:name "x"] [:close-delimiter "}}"]]]]
+     (= [[:open-inverted-section [:name "x"]]]
         (sut/parse "{{^x}}")))
 
     (t/is
-     (= [[:unclosed-section
-          [:open-inverted-section-tag [:open-delimiter "{{"] "^" [:name "x"] [:close-delimiter "}}"]]
-          [:escaped-variable [:open-delimiter "{{"] [:name "x"] [:close-delimiter "}}"]]]]
+     (= [[:open-inverted-section [:name "x"]]
+         [:escaped-variable [:name "x"]]]
         (sut/parse "{{^x}}{{x}}")))))
 
 (t/deftest parse-comment-test
   (t/is
-   (= [[:comment [:open-delimiter "{{"] "!" "x" [:close-delimiter "}}"]]]
+   (= [[:comment "x"]]
       (sut/parse "{{!x}}")))
 
   (t/is
-   (= [[:comment [:open-delimiter "{{"] "!" " x " [:close-delimiter "}}"]]]
+   (= [[:comment " x "]]
       (sut/parse "{{! x }}")))
 
   (t/is
-   (= [[:comment [:open-delimiter "{{"] "!" "\n\nx\n\n" [:close-delimiter "}}"]]]
+   (= [[:comment "\n\nx\n\n"]]
       (sut/parse "{{!\n\nx\n\n}}")))
 
   (t/is
-   (= [[:comment [:open-delimiter "{{"] "!" " x y z " [:close-delimiter "}}"]]]
+   (= [[:comment " x y z "]]
       (sut/parse "{{! x y z }}")))
 
   (t/is
-   (= [[:comment [:open-delimiter "{{"] "!" " x {{x" [:close-delimiter "}}"]] "}}"]
+   (= [[:comment " x {{x"] [:text "}}"]]
       (sut/parse "{{! x {{x}}}}")))
 
   (t/is
-   (= [[:comment [:open-delimiter "{{"] "!" "{{x" [:close-delimiter "}}"]] " " "x}}"]
+   (= [[:comment  "{{x"] [:text " x}}"]]
       (sut/parse "{{!{{x}} x}}"))))
 
-
 (t/deftest set-delimiter-test
-  (t/is (= [[:set-delimiter "{{=" [:new-open-delimiter "<<"] " " [:new-close-delimiter ">>"] "=}}"
-             [:rest-of-mustache ""]]]
+  (t/is (= [[:set-delimiter [:new-open-delimiter "<<"] [:new-close-delimiter ">>"]]]
            (sut/parse "{{=<< >>=}}")))
 
-  (t/is (= [[:set-delimiter "{{=" [:new-open-delimiter "{%"] " " [:new-close-delimiter "%}"] "=}}"
-             [:rest-of-mustache ""]]]
+  (t/is (= [[:set-delimiter [:new-open-delimiter "{%"] [:new-close-delimiter "%}"]]]
            (sut/parse "{{={% %}=}}")))
 
-  (t/is (= [[:set-delimiter "{{= " [:new-open-delimiter "%"] " " [:new-close-delimiter "%"] " =}}"
-             [:rest-of-mustache ""]]]
+  (t/is (= [[:set-delimiter [:new-open-delimiter "%"] [:new-close-delimiter "%"]]]
            (sut/parse "{{= % % =}}")))
 
-  (t/is (= [[:set-delimiter "{{=" [:new-open-delimiter "%"] " " [:new-close-delimiter "%"] "=}}"
-             [:rest-of-mustache "{{x}}"]]]
-           (sut/parse "{{=% %=}}{{x}}"))))
+  (t/is (= [[:set-delimiter [:new-open-delimiter "%"] [:new-close-delimiter "%"] [:rest "{{x}}"]]]
+           (sut/parse "{{=% %=}}{{x}}")))
+
+  (t/is (= [[:set-delimiter [:new-open-delimiter "%"] [:new-close-delimiter "%"] [:rest "=}}"]]]
+           (sut/parse "{{=% %=}}=}}"))))

@@ -5,7 +5,7 @@
 (defn- re-quote [s]
   (re-pattern (Pattern/quote (str s))))
 
-;;; {{name}} -> variable
+;;; {{name}}   -> variable
 ;;; {{{name}}} -> unescaped variable
 ;;; {{#persone}} <-> {{/person}} -> section
 ;;;   false or empty list -> delete
@@ -17,54 +17,43 @@
 ;;; {{> box}} -> partial
 ;;; {{=<% %>=}} -> set delimiter
 
-(def default-open-delimiter "{{")
-(def default-close-delimiter "}}")
+(def default-delimiters
+  {:open "{{" :close "}}"})
 
-(defn gen-parser [open-delimiter* close-delimiter*]
-  (let [open-delimiter (re-quote open-delimiter*)
-        close-delimiter (re-quote close-delimiter*)]
-    (-> (str
-         "
-<mustache> = *(tags / text / space)
-<text> = !tags #'(?m)^.+?(?:(?=" open-delimiter ")|$)'
-<space> = #'\\s+'
+(defn generate-mustache-spec [{:keys [open close] :as delimiters}]
+  (str "
+<mustache> = *(tag / text)
+text = !tag #'^.+?(?:(?=" (re-quote open)  ")|$)'
+whitespace = #'\\s+'
 
-<tags> = (variables / sections / comment / set-delimiter)
-open-delimiter = #'" open-delimiter "'
-close-delimiter = #'" close-delimiter "'
-name = #'(?!\\d)[\\w\\Q$%&*-_+=|?<>\\E][\\w\\Q!$%&*-_+=|:?<>\\E]*' *1 ('.' name)
+<tag> = (variable / section / comment / set-delimiter)
+<ident> = #'(?!\\d)[\\w\\Q$%&*-_+=|?<>\\E][\\w\\Q!$%&*-_+=|:?<>\\E]*'
+name = ident *(<'.'> ident)
 
-<variables> = (escaped-variable / unescaped-variable)
-escaped-variable = open-delimiter *1 space name *1 space close-delimiter
-unescaped-variable = ( " (when (and (= default-open-delimiter open-delimiter*)
-                                    (= default-close-delimiter close-delimiter*))
-                           "open-triple-mustache *1 space name *1 space close-triple-mustache / ")
-         "open-delimiter '&' *1 space name *1 space close-delimiter )
-open-triple-mustache = #'\\Q{{{\\E'
-close-triple-mustache = #'\\Q}}}\\E'
+<variable> = !section !comment !set-delimiter (escaped-variable / unescaped-variable)
+escaped-variable = !unescaped-variable <#'^" (re-quote open) "'> <*1 whitespace> name <*1 whitespace> <#'" (re-quote close) "'>
+unescaped-variable = (!ampersand-unescaped-variable triple-mustache-unescaped-variable / ampersand-unescaped-variable)
+<ampersand-unescaped-variable> = <#'^" (re-quote (str open "&")) "'> <*1 whitespace> name <*1 whitespace> <#'" (re-quote close) "'>
+<triple-mustache-unescaped-variable> = <#'^" (re-quote "{{{") "'> <*1 whitespace> name <*1 whitespace> <#'" (re-quote "}}}") "'>
 
-<sections> = (section / inverted-section / unopened-section / unclosed-section)
-section = open-section-tag mustache close-section-tag
-open-section-tag = open-delimiter '#' *1 space name *1 space close-delimiter
-close-section-tag = open-delimiter '/' *1 space name *1 space close-delimiter
+<section> = (open-section / close-section / open-inverted-section)
+open-section = <#'^" (re-quote (str open "#")) "'> <*1 whitespace> name <*1 whitespace> <#'" (re-quote close) "'>
+close-section = <#'^" (re-quote (str open "/")) "'> <*1 whitespace> name <*1 whitespace> <#'" (re-quote close) "'>
+open-inverted-section = <#'^" (re-quote (str open "^")) "'> <*1 whitespace> name <*1 whitespace> <#'" (re-quote close) "'>
 
-inverted-section = open-inverted-section-tag mustache close-section-tag
-open-inverted-section-tag = open-delimiter '^' *1 space name *1 space close-delimiter
+comment = <#'^" (re-quote (str open "!")) "'> #'(?:.|\\r?\\n)*?(?=" (re-quote close) ")' <#'" (re-quote close) "'>
 
-unopened-section = !(section / inverted-section) mustache close-section-tag
-unclosed-section = !(section / inverted-section) (open-section-tag / open-inverted-section-tag) mustache
-
-comment = open-delimiter '!' #'(?:.|\r?\n)*?(?=" close-delimiter ")' close-delimiter
-
-set-delimiter = #'" open-delimiter "=\\s*' new-open-delimiter ' ' new-close-delimiter #'\\s*=" close-delimiter "' rest-of-mustache
+set-delimiter = <#'^" (re-quote (str open "=")) "'> <*1 whitespace> new-open-delimiter <1* whitespace> new-close-delimiter <*1 whitespace> <#'" (re-quote (str "=" close)) "'> *rest
 new-open-delimiter = #'[^\\s]+'
-new-close-delimiter = #'[^\\s]+?(?=\\s*" (re-quote (str "=" close-delimiter*)) ")'
-rest-of-mustache = #'(?m)(.|\r?\n)*'
-")
-        (insta/parser :input-format :abnf))))
+new-close-delimiter = #'[^\\s]+?(?=\\s*" (re-quote (str "=" close)) ")'
+rest = #'(.|\\r?\\n)*$'
+"))
+
+(defn gen-parser [delimiters]
+  (insta/parser (generate-mustache-spec delimiters) :input-format :abnf))
 
 (def default-parser
-  (gen-parser "{{" "}}"))
+  (gen-parser default-delimiters))
 
 (defn parse
   ([mustache]
