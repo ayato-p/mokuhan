@@ -18,17 +18,17 @@
 (defn variable? [x]
   (satisfies? Variable x))
 
-(defrecord EscapedVariable [keys]
+(defrecord EscapedVariable [path]
   Variable)
 
-(defn new-escaped-variable [keys]
-  (EscapedVariable. (vec keys)))
+(defn new-escaped-variable [path]
+  (EscapedVariable. (vec path)))
 
-(defrecord UnescapedVariable [keys]
+(defrecord UnescapedVariable [path]
   Variable)
 
-(defn new-unescaped-variable [keys]
-  (UnescapedVariable. (vec keys)))
+(defn new-unescaped-variable [path]
+  (UnescapedVariable. (vec path)))
 
 ;;; section
 (defprotocol Section)
@@ -36,33 +36,33 @@
 (defn section? [x]
   (satisfies? Section x))
 
-(defrecord StandardSection [keys contents]
+(defrecord StandardSection [path contents]
   Section
   ASTZipper
   (branch? [this] true)
   (children [this] contents)
   (make-node [this children]
-    (StandardSection. keys children)))
+    (StandardSection. path children)))
 
 (defn new-standard-section
-  ([keys]
-   (new-standard-section keys []))
-  ([keys contents]
-   (StandardSection. (vec keys) contents)))
+  ([path]
+   (new-standard-section path []))
+  ([path contents]
+   (StandardSection. (vec path) contents)))
 
-(defrecord InvertedSection [keys contents]
+(defrecord InvertedSection [path contents]
   Section
   ASTZipper
   (branch? [this] true)
   (children [this] contents)
   (make-node [this children]
-    (InvertedSection. keys children)))
+    (InvertedSection. path children)))
 
 (defn new-inverted-section
-  ([keys]
-   (new-inverted-section keys []))
-  ([keys contents]
-   (InvertedSection. (vec keys) contents)))
+  ([path]
+   (new-inverted-section path []))
+  ([path contents]
+   (InvertedSection. (vec path) contents)))
 
 ;; other
 (defrecord Text [content])

@@ -24,7 +24,7 @@
 (extend-protocol Rendable
   EscapedVariable
   (render [variable data]
-    (-> (reduce #(traverse %1 %2) data (.keys variable))
+    (-> (reduce #(traverse %1 %2) data (.path variable))
         str
         escape-html))
 
