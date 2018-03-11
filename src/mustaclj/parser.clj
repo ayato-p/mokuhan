@@ -1,6 +1,8 @@
 (ns mustaclj.parser
-  (:import java.util.regex.Pattern)
-  (:require [instaparse.core :as insta]))
+  (:require [fast-zip.core :as zip]
+            [instaparse.core :as insta]
+            [mustaclj.ast :as ast])
+  (:import java.util.regex.Pattern))
 
 (defn- re-quote [s]
   (re-pattern (Pattern/quote (str s))))
@@ -23,11 +25,11 @@
 (defn generate-mustache-spec [{:keys [open close] :as delimiters}]
   (str "
 <mustache> = *(tag / text)
-text = !tag #'^.+?(?:(?=" (re-quote open)  ")|$)'
+text = !tag #'^(.|\\r?\\n)+?(?:(?=" (re-quote open)  ")|$)'
 whitespace = #'\\s+'
 
-<tag> = (variable / section / comment / set-delimiter)
-<ident> = #'(?!\\d)[\\w\\Q$%&*-_+=|?<>\\E][\\w\\Q!$%&*-_+=|:?<>\\E]*'
+<tag> = (set-delimiter / comment / section / variable)
+<ident> = #'(?!\\d)[\\w\\Q$%&*-_+=|?<>\\E][\\w\\Q!$%&*-_+=|:?<>\\E]*?(?=\\s|\\.|" (re-quote close) ")'
 name = ident *(<'.'> ident)
 
 <variable> = !section !comment !set-delimiter (escaped-variable / unescaped-variable)
@@ -55,9 +57,60 @@ rest = #'(.|\\r?\\n)*$'
 (def default-parser
   (gen-parser default-delimiters))
 
+(defn parse*
+  ([mustache]
+   (parse* mustache {}))
+  ([mustache opts]
+   (let [parser (:parser opts default-parser)]
+     (->> (dissoc opts :parser)
+          (reduce-kv #(conj %1 %2 %3) [])
+          (apply insta/parse parser mustache)))))
+
+
+(defn- vec->ast-node [v]
+  (case (first v)
+    :text (ast/new-text (second v))
+    :comment (ast/new-comment (second v))
+    :escaped-variable (ast/new-escaped-variable (drop 1 (second v)))
+    :unescaped-variable (ast/new-unescaped-variable (drop 1 (second v)))
+    :open-section (ast/new-standard-section (drop 1 (second v)))
+    :open-inverted-section (ast/new-inverted-section (drop 1 (second v)))))
+
+(defn- meta-without-qualifiers [x]
+  (some->> (meta x)
+           (reduce-kv #(assoc %1 (-> %2 name keyword) %3) {})))
+
 (defn parse
   ([mustache]
    (parse mustache {}))
   ([mustache opts]
-   (->> (reduce-kv #(conj %1 %2 %3) [] opts)
-        (apply insta/parse default-parser mustache))))
+   (loop [loc (ast/ast-zip)
+          [elm & parsed] (parse* mustache opts)
+          stack []]
+     (if (nil? elm)
+       (if (zip/up loc)
+         (throw (ex-info "Unclosed section"
+                         {:type ::unclosed-section
+                          :tag (second elm)
+                          :meta (meta-without-qualifiers elm)}))
+         (zip/root loc))
+       (case (first elm)
+         (:open-section :open-inverted-section)
+         (recur (-> loc (zip/append-child (vec->ast-node elm)) zip/down zip/rightmost)
+                parsed
+                (conj stack (second elm)))
+
+         :close-section
+         (if (= (peek stack) (second elm))
+           (recur (-> loc zip/up) parsed (pop stack))
+           (throw (ex-info "Unopened section"
+                           {:type ::unopend-section
+                            :tag (second elm)
+                            :meta (meta-without-qualifiers elm)})))
+
+         :set-delimiter
+         (let [[_ [_ open] [_ close] [_ rest-of-mustache]] elm
+               parser (gen-parser {:open open :close close})]
+           (recur loc (parse* rest-of-mustache {:parser parser}) stack))
+
+         (recur (-> loc (zip/append-child (vec->ast-node elm))) parsed stack))))))
