@@ -1,14 +1,30 @@
 (ns mustaclj.renderer
-  (:require [clojure.string :as str])
-  (:import [mustaclj.ast EscapedVariable StandardSection UnescapedVariable]))
+  (:require [clojure.string :as str]
+            [mustaclj.ast :as ast])
+  (:import [mustaclj.ast EscapedVariable Mustache StandardSection UnescapedVariable]))
 
 (defprotocol Traverse
-  (traverse [this key]))
+  (traverse [this path] [this path position]))
 
 (extend-protocol Traverse
+  nil
+  (traverse
+    ([_ _])
+    ([_ _ _]))
+
   clojure.lang.IPersistentMap
-  (traverse [this key]
-    (get this (keyword key))))
+  (traverse
+    ([m path]
+     (let [[p & path] path]
+       (cond-> (get m (keyword p))
+         (seq path) (traverse path))))
+    ([m path position]
+     (loop [position position]
+       (if (seq position)
+         (or (-> (traverse m position)
+                 (traverse path))
+             (recur (pop position)))
+         (traverse m path))))))
 
 (defn- escape-html [s]
   (-> s
@@ -19,20 +35,33 @@
       (str/replace #"'" "&#39;" #_"&apos;")))
 
 (defprotocol Rendable
-  (render [this data]))
+  (render [this data state]))
+
+(defn- initial-state []
+  {:position []})
 
 (extend-protocol Rendable
+  Mustache
+  (render [mustache data state]
+    (let [contents (ast/children mustache)]
+      (reduce (fn [sb c]
+                (->> (render c data (initial-state))
+                     (.append sb)))
+              (StringBuffer. contents)
+              contents)))
+
   EscapedVariable
-  (render [variable data]
-    (-> (reduce #(traverse %1 %2) data (.path variable))
-        str
-        escape-html))
+  (render [variable data state]
+    (let [position (:position state)]
+      (-> (traverse data (.path variable) position)
+          str
+          escape-html)))
 
   UnescapedVariable
-  (render [variable data]
-    (-> (->> (.keys variable)
-             (reduce #(traverse %1 %2) data))
-        str))
+  (render [variable data state]
+    (let [position (:position state)]
+      (-> (traverse data (.path variable) position)
+          str)))
 
   StandardSection
-  (render [section data]))
+  (render [section data state]))
