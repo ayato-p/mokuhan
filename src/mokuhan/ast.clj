@@ -70,6 +70,11 @@
 (defn new-text [content]
   (Text. content))
 
+(defrecord Newline [content])
+
+(defn new-newline [content]
+  (Newline. content))
+
 (defrecord Comment [content])
 
 (defn new-comment [content]
