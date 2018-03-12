@@ -65,17 +65,30 @@
    (InvertedSection. (vec path) contents)))
 
 ;; other
-(defrecord Text [content])
+(defrecord Text [content]
+  Object
+  (toString [this] (.toString content)))
 
 (defn new-text [content]
   (Text. content))
 
-(defrecord Newline [content])
+(defrecord Whitespace [content]
+  Object
+  (toString [this] (.toString content)))
+
+(defn new-whitespace [content]
+  (Whitespace. content))
+
+(defrecord Newline [content]
+  Object
+  (toString [this] (.toString content)))
 
 (defn new-newline [content]
   (Newline. content))
 
-(defrecord Comment [content])
+(defrecord Comment [content]
+  Object
+  (toString [this] ""))
 
 (defn new-comment [content]
   (Comment. content))

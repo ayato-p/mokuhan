@@ -21,7 +21,7 @@
 
     (t/are [src expected] (= expected (sut/parse* src))
       " {{ x }} "
-      [[:text " "] [:escaped-variable [:name "x"]] [:text " "]]
+      [[:whitespace " "] [:escaped-variable [:name "x"]] [:whitespace " "]]
 
       "--{{x}}--"
       [[:text "--"] [:escaped-variable [:name "x"]] [:text "--"]]
@@ -71,7 +71,7 @@
         (sut/parse* "{{&\nx.y\n}}")))
 
     (t/is
-     (= [[:text " "] [:unescaped-variable [:name "x"]] [:text " "]]
+     (= [[:whitespace " "] [:unescaped-variable [:name "x"]] [:whitespace " "]]
         (sut/parse* " {{{x}}} ")
         (sut/parse* " {{&x}} ")))
 
@@ -122,20 +122,21 @@
         "{{.x}}" [[:text "{{.x}}"]]
         "{{x.}}" [[:text "{{x.}}"]]
         "{{.x.}}" [[:text "{{.x.}}"]]
-        "{{x . y}}" [[:text "{{x . y}}"]]
-        "{{x. y}}" [[:text "{{x. y}}"]]
-        "{{x .y}}" [[:text "{{x .y}}"]]
+        "{{x . y}}" [[:text "{{x"] [:whitespace  " "] [:text  "."]
+                     [:whitespace " "] [:text "y}}"]]
+        "{{x. y}}" [[:text "{{x."] [:whitespace " "] [:text "y}}"]]
+        "{{x .y}}" [[:text "{{x"] [:whitespace " "] [:text ".y}}"]]
         "{{x}} {{.y}}" [[:escaped-variable [:name "x"]]
-                        [:text  " "] [:text "{{.y}}"]]
-        "{{.x}} {{y}}" [[:text "{{.x}} "]
+                        [:whitespace  " "] [:text "{{.y}}"]]
+        "{{.x}} {{y}}" [[:text "{{.x}}"] [:whitespace  " "]
                         [:escaped-variable [:name "y"]]]
         "{{x}} {{.y}} {{z}}" [[:escaped-variable [:name "x"]]
-                              [:text " "]
-                              [:text "{{.y}} "]
+                              [:whitespace " "]
+                              [:text "{{.y}}"] [:whitespace " "]
                               [:escaped-variable [:name "z"]]]
-        "{{.x}} {{y}} {{.z}}" [[:text "{{.x}} "]
+        "{{.x}} {{y}} {{.z}}" [[:text "{{.x}}"] [:whitespace " "]
                                [:escaped-variable [:name "y"]]
-                               [:text " "]
+                               [:whitespace " "]
                                [:text "{{.z}}"]]))))
 
 (t/deftest parse-section-test
@@ -242,7 +243,7 @@
       (sut/parse* "{{! x {{x}}}}")))
 
   (t/is
-   (= [[:comment  "{{x"] [:text " x}}"]]
+   (= [[:comment  "{{x"] [:whitespace " "] [:text "x}}"]]
       (sut/parse* "{{!{{x}} x}}"))))
 
 (t/deftest parse-set-delimiter-test
@@ -261,14 +262,21 @@
   (t/is (= [[:set-delimiter [:new-open-delimiter "%"] [:new-close-delimiter "%"] [:rest "=}}"]]]
            (sut/parse* "{{=% %=}}=}}"))))
 
+(t/deftest parse-newline-test
+  (t/is (= [[:newline "\n"]]
+           (sut/parse* "\n")))
+
+  (t/is (= [[:newline "\r\n"]]
+           (sut/parse* "\r\n"))))
+
 (t/deftest parser-test
   (t/is
    (= #mokuhan.ast.Mustache
       {:contents
        (#mokuhan.ast.EscapedVariable{:path ["x"]}
-        #mokuhan.ast.Text{:content " "}
+        #mokuhan.ast.Whitespace{:content " "}
         #mokuhan.ast.EscapedVariable{:path ["y"]}
-        #mokuhan.ast.Text{:content " "}
+        #mokuhan.ast.Whitespace{:content " "}
         #mokuhan.ast.EscapedVariable{:path ["z"]})}
       (sut/parse "{{x}} {{y}} {{z}}")))
 
@@ -278,9 +286,9 @@
        (#mokuhan.ast.StandardSection
         {:path ["person"],
          :contents
-         (#mokuhan.ast.Text{:content " "}
+         (#mokuhan.ast.Whitespace{:content " "}
           #mokuhan.ast.EscapedVariable{:path ["name"]}
-          #mokuhan.ast.Text{:content " "})})}
+          #mokuhan.ast.Whitespace{:content " "})})}
       (sut/parse "{{#person}} {{name}} {{/person}}")))
 
   (t/is
@@ -290,7 +298,9 @@
        (#mokuhan.ast.InvertedSection
         {:path ["person"],
          :contents
-         (#mokuhan.ast.Text{:content " Nothing "})})}))
+         (#mokuhan.ast.Whitespace{:content " "}
+          #mokuhan.ast.Text{:content "Nothing"}
+          #mokuhan.ast.Whitespace{:content " "})})}))
 
   (t/is (thrown-with-msg?
          clojure.lang.ExceptionInfo #"Unopened section"

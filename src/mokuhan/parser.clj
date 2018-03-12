@@ -24,8 +24,8 @@
 
 (defn generate-mustache-spec [{:keys [open close] :as delimiters}]
   (str "
-<mustache> = *(*(tag / text) (newline / <eof>))
-text = !tag #'^[^\\r\\n]+?(?=(?:" (re-quote open)  "|\\r?\\n|\\z))'
+<mustache> = *(*(tag / text / whitespace) (newline / <eof>))
+text = !tag #'^[^\\r\\n\\s]+?(?=(?:" (re-quote open)  "|\\r?\\n|\\s|\\z))'
 whitespace = #'\\s+'
 newline = #'\\r?\\n'
 eof = #'\\z'
@@ -72,6 +72,7 @@ rest = #'(.|\\r?\\n)*$'
 (defn- vec->ast-node [v]
   (case (first v)
     :text (ast/new-text (second v))
+    :whitespace (ast/new-whitespace (second v))
     :newline (ast/new-newline (second v))
     :comment (ast/new-comment (second v))
     :escaped-variable (ast/new-escaped-variable (drop 1 (second v)))
