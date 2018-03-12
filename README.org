@@ -1,10 +1,6 @@
-* mustaclj
+* Mokuhan (木版)
 
-A Clojure library designed to ... well, that part is up to you.
-
-** Usage
-
-FIXME
+Mokuhan is yet another implementation of Mustache in Clojure.
 
 ** License
 

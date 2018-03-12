@@ -1,6 +1,6 @@
-(ns mustaclj.parser-test
+(ns mokuhan.parser-test
   (:require [clojure.test :as t]
-            [mustaclj.parser :as sut]))
+            [mokuhan.parser :as sut]))
 
 (t/deftest parse-variables-test
   (t/testing "escaped variables"
@@ -263,34 +263,34 @@
 
 (t/deftest parser-test
   (t/is
-   (= #mustaclj.ast.Mustache
+   (= #mokuhan.ast.Mustache
       {:contents
-       (#mustaclj.ast.EscapedVariable{:keys ["x"]}
-        #mustaclj.ast.Text{:content " "}
-        #mustaclj.ast.EscapedVariable{:keys ["y"]}
-        #mustaclj.ast.Text{:content " "}
-        #mustaclj.ast.EscapedVariable{:keys ["z"]})}
+       (#mokuhan.ast.EscapedVariable{:path ["x"]}
+        #mokuhan.ast.Text{:content " "}
+        #mokuhan.ast.EscapedVariable{:path ["y"]}
+        #mokuhan.ast.Text{:content " "}
+        #mokuhan.ast.EscapedVariable{:path ["z"]})}
       (sut/parse "{{x}} {{y}} {{z}}")))
 
   (t/is
-   (= #mustaclj.ast.Mustache
+   (= #mokuhan.ast.Mustache
       {:contents
-       (#mustaclj.ast.StandardSection
-        {:keys ["person"],
+       (#mokuhan.ast.StandardSection
+        {:path ["person"],
          :contents
-         (#mustaclj.ast.Text{:content " "}
-          #mustaclj.ast.EscapedVariable{:keys ["name"]}
-          #mustaclj.ast.Text{:content " "})})}
+         (#mokuhan.ast.Text{:content " "}
+          #mokuhan.ast.EscapedVariable{:path ["name"]}
+          #mokuhan.ast.Text{:content " "})})}
       (sut/parse "{{#person}} {{name}} {{/person}}")))
 
   (t/is
    (= (sut/parse "{{^person}} Nothing {{/person}}")
-      #mustaclj.ast.Mustache
+      #mokuhan.ast.Mustache
       {:contents
-       (#mustaclj.ast.InvertedSection
-        {:keys ["person"],
+       (#mokuhan.ast.InvertedSection
+        {:path ["person"],
          :contents
-         (#mustaclj.ast.Text{:content " Nothing "})})}))
+         (#mokuhan.ast.Text{:content " Nothing "})})}))
 
   (t/is (thrown-with-msg?
          clojure.lang.ExceptionInfo #"Unopened section"

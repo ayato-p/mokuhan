@@ -1,7 +1,7 @@
-(ns mustaclj.renderer
+(ns mokuhan.renderer
   (:require [clojure.string :as str]
-            [mustaclj.ast :as ast])
-  (:import [mustaclj.ast EscapedVariable Mustache StandardSection UnescapedVariable]))
+            [mokuhan.ast :as ast])
+  (:import [mokuhan.ast EscapedVariable Mustache StandardSection UnescapedVariable]))
 
 (defprotocol Traverse
   (traverse [this path] [this path position]))

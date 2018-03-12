@@ -1,6 +1,6 @@
-(defproject ayato_p/mustaclj "0.1.0-SNAPSHOT"
-  :description "FIXME: write description"
-  :url "http://example.com/FIXME"
+(defproject ayato_p/mokuhan "0.1.0-SNAPSHOT"
+  :description "Yet another implementation of Mustache in Clojure."
+  :url "https://github.com/ayato-p/mokuhan"
   :license {:name "MIT License"
             :url "https://choosealicense.com/licenses/mit"}
   :dependencies [[instaparse "1.4.8"]

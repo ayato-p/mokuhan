@@ -1,4 +1,4 @@
-(ns mustaclj.ast
+(ns mokuhan.ast
   (:require [fast-zip.core :as zip]))
 
 (defprotocol ASTZipper

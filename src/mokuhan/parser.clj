@@ -1,7 +1,7 @@
-(ns mustaclj.parser
+(ns mokuhan.parser
   (:require [fast-zip.core :as zip]
             [instaparse.core :as insta]
-            [mustaclj.ast :as ast])
+            [mokuhan.ast :as ast])
   (:import java.util.regex.Pattern))
 
 (defn- re-quote [s]
