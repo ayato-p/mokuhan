@@ -1,30 +1,8 @@
 (ns mokuhan.renderer
   (:require [clojure.string :as str]
-            [mokuhan.ast :as ast])
-  (:import [mokuhan.ast EscapedVariable Mustache StandardSection UnescapedVariable]))
-
-(defprotocol Traverse
-  (traverse [this path] [this path position]))
-
-(extend-protocol Traverse
-  nil
-  (traverse
-    ([_ _])
-    ([_ _ _]))
-
-  clojure.lang.IPersistentMap
-  (traverse
-    ([m path]
-     (let [[p & path] path]
-       (cond-> (get m (keyword p))
-         (seq path) (traverse path))))
-    ([m path position]
-     (loop [position position]
-       (if (seq position)
-         (or (-> (traverse m position)
-                 (traverse path))
-             (recur (pop position)))
-         (traverse m path))))))
+            [mokuhan.ast :as ast]
+            [mokuhan.walk :as walk])
+  (:import [mokuhan.ast EscapedVariable InvertedSection Mustache StandardSection UnescapedVariable]))
 
 (defn- escape-html [s]
   (-> s
