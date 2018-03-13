@@ -16,9 +16,16 @@
 
   java.util.Map
   (traverse
-    ([o path]
+    ([m path]
      (let [[p & path] path]
-       (cond-> (.get o p)
+       (cond-> (.get m p)
+         (seq path) (proto/traverse path)))))
+
+  java.util.List
+  (traverse
+    ([l path]
+     (let [[p & path] path]
+       (cond-> (.get l p)
          (seq path) (proto/traverse path)))))
 
   clojure.lang.IPersistentMap
