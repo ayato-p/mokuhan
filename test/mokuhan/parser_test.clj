@@ -93,51 +93,53 @@
      (= [[:text "{"] [:unescaped-variable [:name "x"]] [:text "}"]]
         (sut/parse* "{{{& x }}}")))))
 
+(defn- find-name [vec-or-any]
+  (when (sequential? vec-or-any)
+    (if (= :name (first vec-or-any))
+      vec-or-any
+      (reduce #(when-let [res (find-name %2)]
+                 (reduced res))
+              nil
+              vec-or-any))))
+
 (t/deftest parse-name-test
-  (letfn [(find-name [vec-or-any]
-            (when (sequential? vec-or-any)
-              (if (= :name (first vec-or-any))
-                vec-or-any
-                (reduce #(when-let [res (find-name %2)]
-                           (reduced res))
-                        nil
-                        vec-or-any))))]
-    (t/testing "single name"
-      (t/are [src expected] (= expected (find-name (sut/parse* src)))
-        "{{x}}" [:name "x"]
-        " {{x}} " [:name "x"]
-        "{{ x }}" [:name "x"]
-        "{{\n\nx\n\n}}" [:name "x"]))
+  (t/testing "single name"
+    (t/are [src expected] (= expected (find-name (sut/parse* src)))
+      "{{x}}" [:name "x"]
+      " {{x}} " [:name "x"]
+      "{{ x }}" [:name "x"]
+      "{{\n\nx\n\n}}" [:name "x"]))
 
-    (t/testing "dotted name"
-      (t/are [src expected] (= expected (find-name (sut/parse* src)))
-        "{{x.y}}" [:name "x" "y"]
-        " {{x.y}} " [:name "x" "y"]
-        "{{ x.y }}" [:name "x" "y"]
-        "{{x.y.z}}" [:name "x" "y" "z"]
-        "{{\n\nx.y.z\n\n}}" [:name "x" "y" "z"]))
 
-    (t/testing "illegal names"
-      (t/are [src expected] (= expected (sut/parse* src))
-        "{{.x}}" [[:text "{{.x}}"]]
-        "{{x.}}" [[:text "{{x.}}"]]
-        "{{.x.}}" [[:text "{{.x.}}"]]
-        "{{x . y}}" [[:text "{{x"] [:whitespace  " "] [:text  "."]
-                     [:whitespace " "] [:text "y}}"]]
-        "{{x. y}}" [[:text "{{x."] [:whitespace " "] [:text "y}}"]]
-        "{{x .y}}" [[:text "{{x"] [:whitespace " "] [:text ".y}}"]]
-        "{{x}} {{.y}}" [[:escaped-variable [:name "x"]]
-                        [:whitespace  " "] [:text "{{.y}}"]]
-        "{{.x}} {{y}}" [[:text "{{.x}}"] [:whitespace  " "]
-                        [:escaped-variable [:name "y"]]]
-        "{{x}} {{.y}} {{z}}" [[:escaped-variable [:name "x"]]
-                              [:whitespace " "]
-                              [:text "{{.y}}"] [:whitespace " "]
-                              [:escaped-variable [:name "z"]]]
-        "{{.x}} {{y}} {{.z}}" [[:text "{{.x}}"] [:whitespace " "]
-                               [:escaped-variable [:name "y"]]
-                               [:whitespace " "]
-                               [:text "{{.z}}"]]))))
+  (t/testing "dotted name"
+    (t/are [src expected] (= expected (find-name (sut/parse* src)))
+      "{{x.y}}" [:name "x" "y"]
+      " {{x.y}} " [:name "x" "y"]
+      "{{ x.y }}" [:name "x" "y"]
+      "{{x.y.z}}" [:name "x" "y" "z"]
+      "{{\n\nx.y.z\n\n}}" [:name "x" "y" "z"]))
+
+  (t/testing "illegal names"
+    (t/are [src expected] (= expected (sut/parse* src))
+      "{{.x}}" [[:text "{{.x}}"]]
+      "{{x.}}" [[:text "{{x.}}"]]
+      "{{.x.}}" [[:text "{{.x.}}"]]
+      "{{x . y}}" [[:text "{{x"] [:whitespace  " "] [:text  "."]
+                   [:whitespace " "] [:text "y}}"]]
+      "{{x. y}}" [[:text "{{x."] [:whitespace " "] [:text "y}}"]]
+      "{{x .y}}" [[:text "{{x"] [:whitespace " "] [:text ".y}}"]]
+      "{{x}} {{.y}}" [[:escaped-variable [:name "x"]]
+                      [:whitespace  " "] [:text "{{.y}}"]]
+      "{{.x}} {{y}}" [[:text "{{.x}}"] [:whitespace  " "]
+                      [:escaped-variable [:name "y"]]]
+      "{{x}} {{.y}} {{z}}" [[:escaped-variable [:name "x"]]
+                            [:whitespace " "]
+                            [:text "{{.y}}"] [:whitespace " "]
+                            [:escaped-variable [:name "z"]]]
+      "{{.x}} {{y}} {{.z}}" [[:text "{{.x}}"] [:whitespace " "]
+                             [:escaped-variable [:name "y"]]
+                             [:whitespace " "]
+                             [:text "{{.z}}"]])))
 
 (t/deftest parse-section-test
   (t/testing "standard section"
@@ -288,7 +290,8 @@
          :contents
          (#mokuhan.ast.Whitespace{:content " "}
           #mokuhan.ast.EscapedVariable{:path ["name"]}
-          #mokuhan.ast.Whitespace{:content " "})})}
+          #mokuhan.ast.Whitespace{:content " "}
+          nil)})}
       (sut/parse "{{#person}} {{name}} {{/person}}")))
 
   (t/is
@@ -300,7 +303,8 @@
          :contents
          (#mokuhan.ast.Whitespace{:content " "}
           #mokuhan.ast.Text{:content "Nothing"}
-          #mokuhan.ast.Whitespace{:content " "})})}))
+          #mokuhan.ast.Whitespace{:content " "}
+          nil)})}))
 
   (t/is (thrown-with-msg?
          clojure.lang.ExceptionInfo #"Unopened section"
