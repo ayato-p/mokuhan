@@ -1,7 +1,8 @@
 (ns mokuhan.parser
   (:require [fast-zip.core :as zip]
             [instaparse.core :as insta]
-            [mokuhan.ast :as ast])
+            [mokuhan.ast :as ast]
+            [mokuhan.util.misc :as misc])
   (:import java.util.regex.Pattern))
 
 (defn- re-quote [s]
@@ -95,31 +96,44 @@ rest = #'(.|\\r?\\n)*$'
   ([mustache opts]
    (loop [loc (ast/ast-zip)
           [elm & parsed] (parse* mustache opts)
-          stack []]
+          state {:stack []}]
      (if (nil? elm)
        (if (zip/up loc)
          (throw (ex-info "Unclosed section"
                          {:type ::unclosed-section
                           :tag (second elm)
-                          :meta (meta-without-qualifiers elm)}))
+                          :meta (misc/meta-without-qualifiers elm)}))
          (zip/root loc))
        (case (first elm)
          (:open-section :open-inverted-section)
          (recur (-> loc (zip/append-child (vec->ast-node elm)) zip/down zip/rightmost)
                 parsed
-                (conj stack (second elm)))
+                (update state :stack conj (second elm)))
 
          :close-section
-         (if (= (peek stack) (second elm))
-           (recur (-> loc zip/up) parsed (pop stack))
+         (if (= (peek (:stack state)) (second elm))
+           (recur (-> loc zip/up)
+                  parsed
+                  (update state :stack pop))
            (throw (ex-info "Unopened section"
                            {:type ::unopend-section
                             :tag (second elm)
-                            :meta (meta-without-qualifiers elm)})))
+                            :meta (misc/meta-without-qualifiers elm)})))
 
          :set-delimiter
          (let [[_ [_ open] [_ close] [_ rest-of-mustache]] elm
                parser (gen-parser {:open open :close close})]
-           (recur loc (parse* rest-of-mustache {:parser parser}) stack))
+           (recur loc
+                  (parse* rest-of-mustache {:parser parser})
+                  state))
 
-         (recur (-> loc (zip/append-child (vec->ast-node elm))) parsed stack))))))
+         (recur (-> loc (zip/append-child (vec->ast-node elm)))
+                parsed
+                state))))))
+
+(parse
+ "
+  {{#x}}
+
+  {{/x}}
+")
