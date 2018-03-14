@@ -1,6 +1,6 @@
-(ns mokuhan.renderer.protocol
-  (:require [mokuhan.util.misc :as misc]
-            [mokuhan.util.stringbuilder :as sb]))
+(ns org.panchromatic.mokuhan.renderer.protocol
+  (:require [org.panchromatic.mokuhan.util.misc :as misc]
+            [org.panchromatic.mokuhan.util.stringbuilder :as sb]))
 
 (defprotocol Rendable
   (render [this context state]))

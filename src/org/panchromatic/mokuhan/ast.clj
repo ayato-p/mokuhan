@@ -1,4 +1,4 @@
-(ns mokuhan.ast
+(ns org.panchromatic.mokuhan.ast
   (:require [fast-zip.core :as zip]))
 
 (defprotocol ASTZipper

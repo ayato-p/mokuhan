@@ -1,4 +1,4 @@
-(ns mokuhan.util.stringbuilder)
+(ns org.panchromatic.mokuhan.util.stringbuilder)
 
 #?(:clj
    (defn new-string-builder []

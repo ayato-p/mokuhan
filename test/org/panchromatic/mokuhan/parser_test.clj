@@ -1,6 +1,6 @@
-(ns mokuhan.parser-test
+(ns org.panchromatic.mokuhan.parser-test
   (:require [clojure.test :as t]
-            [mokuhan.parser :as sut]))
+            [org.panchromatic.mokuhan.parser :as sut]))
 
 (t/deftest parse-variables-test
   (t/testing "escaped variables"
@@ -273,37 +273,37 @@
 
 (t/deftest parser-test
   (t/is
-   (= #mokuhan.ast.Mustache
+   (= #org.panchromatic.mokuhan.ast.Mustache
       {:contents
-       (#mokuhan.ast.EscapedVariable{:path ["x"]}
-        #mokuhan.ast.Whitespace{:content " "}
-        #mokuhan.ast.EscapedVariable{:path ["y"]}
-        #mokuhan.ast.Whitespace{:content " "}
-        #mokuhan.ast.EscapedVariable{:path ["z"]})}
+       (#org.panchromatic.mokuhan.ast.EscapedVariable{:path ["x"]}
+        #org.panchromatic.mokuhan.ast.Whitespace{:content " "}
+        #org.panchromatic.mokuhan.ast.EscapedVariable{:path ["y"]}
+        #org.panchromatic.mokuhan.ast.Whitespace{:content " "}
+        #org.panchromatic.mokuhan.ast.EscapedVariable{:path ["z"]})}
       (sut/parse "{{x}} {{y}} {{z}}")))
 
   (t/is
-   (= #mokuhan.ast.Mustache
+   (= #org.panchromatic.mokuhan.ast.Mustache
       {:contents
-       (#mokuhan.ast.StandardSection
+       (#org.panchromatic.mokuhan.ast.StandardSection
         {:path ["person"],
          :contents
-         (#mokuhan.ast.Whitespace{:content " "}
-          #mokuhan.ast.EscapedVariable{:path ["name"]}
-          #mokuhan.ast.Whitespace{:content " "}
+         (#org.panchromatic.mokuhan.ast.Whitespace{:content " "}
+          #org.panchromatic.mokuhan.ast.EscapedVariable{:path ["name"]}
+          #org.panchromatic.mokuhan.ast.Whitespace{:content " "}
           nil)})}
       (sut/parse "{{#person}} {{name}} {{/person}}")))
 
   (t/is
    (= (sut/parse "{{^person}} Nothing {{/person}}")
-      #mokuhan.ast.Mustache
+      #org.panchromatic.mokuhan.ast.Mustache
       {:contents
-       (#mokuhan.ast.InvertedSection
+       (#org.panchromatic.mokuhan.ast.InvertedSection
         {:path ["person"],
          :contents
-         (#mokuhan.ast.Whitespace{:content " "}
-          #mokuhan.ast.Text{:content "Nothing"}
-          #mokuhan.ast.Whitespace{:content " "}
+         (#org.panchromatic.mokuhan.ast.Whitespace{:content " "}
+          #org.panchromatic.mokuhan.ast.Text{:content "Nothing"}
+          #org.panchromatic.mokuhan.ast.Whitespace{:content " "}
           nil)})}))
 
   (t/is (thrown-with-msg?

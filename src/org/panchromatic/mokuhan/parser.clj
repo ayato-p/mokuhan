@@ -1,8 +1,8 @@
-(ns mokuhan.parser
+(ns org.panchromatic.mokuhan.parser
   (:require [fast-zip.core :as zip]
             [instaparse.core :as insta]
-            [mokuhan.ast :as ast]
-            [mokuhan.util.misc :as misc])
+            [org.panchromatic.mokuhan.util.misc :as misc]
+            [org.panchromatic.mokuhan.ast :as ast])
   (:import java.util.regex.Pattern))
 
 (defn- re-quote [s]

@@ -1,6 +1,9 @@
-(ns mokuhan.walker
-  (:require mokuhan.walker.platform
-            [mokuhan.walker.protocol :as proto]))
+(ns org.panchromatic.mokuhan.walker
+  (:require [org.panchromatic.mokuhan.walker.platform :as platform]
+            [org.panchromatic.mokuhan.walker.protocol :as proto]))
+
+;; don't remove platform ns via ns clean-up
+::platform/require
 
 (defn traverse
   ([x path]

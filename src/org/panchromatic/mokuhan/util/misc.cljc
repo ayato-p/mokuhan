@@ -1,4 +1,4 @@
-(ns mokuhan.util.misc)
+(ns org.panchromatic.mokuhan.util.misc)
 
 (defn truthy? [o]
   (and (not (false? o)) (some? o)))

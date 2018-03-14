@@ -1,12 +1,16 @@
-(ns mokuhan.renderer
+(ns org.panchromatic.mokuhan.renderer
   (:require [clojure.string :as str]
-            [mokuhan.ast :as ast
-             #?@(:cljs [:refer [mokuhan.ast EscapedVariable InvertedSection Mustache StandardSection UnescapedVariable]])]
-            mokuhan.renderer.platform
-            [mokuhan.renderer.protocol :as proto]
-            [mokuhan.util.stringbuilder :as sb]
-            [mokuhan.walker :as walker])
-  #?(:clj (:import [mokuhan.ast EscapedVariable InvertedSection Mustache StandardSection UnescapedVariable])))
+            [org.panchromatic.mokuhan.ast :as ast
+             #?@(:cljs [:refer [EscapedVariable InvertedSection Mustache StandardSection UnescapedVariable]])]
+            [org.panchromatic.mokuhan.renderer.platform :as platform]
+            [org.panchromatic.mokuhan.renderer.protocol :as proto]
+            [org.panchromatic.mokuhan.util.stringbuilder :as sb]
+            [org.panchromatic.mokuhan.walker :as walker])
+  #?(:clj
+     (:import [org.panchromatic.mokuhan.ast EscapedVariable InvertedSection Mustache StandardSection UnescapedVariable])))
+
+;; don't remove platform ns via ns clean-up
+::platform/require
 
 (defn- escape-html [s]
   (-> s

@@ -1,5 +1,5 @@
-(ns mokuhan.renderer.platform
-  (:require [mokuhan.renderer.protocol :as proto]))
+(ns org.panchromatic.mokuhan.renderer.platform
+  (:require [org.panchromatic.mokuhan.renderer.protocol :as proto]))
 
 (extend-type java.util.List
   proto/StandardSectionRenderer

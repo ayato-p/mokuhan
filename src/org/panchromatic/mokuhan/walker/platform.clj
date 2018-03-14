@@ -1,5 +1,5 @@
-(ns mokuhan.walker.platform
-  (:require [mokuhan.walker.protocol :as proto]))
+(ns org.panchromatic.mokuhan.walker.platform
+  (:require [org.panchromatic.mokuhan.walker.protocol :as proto]))
 
 (defn- invoke-instance-method [^Object o ^String method-name]
   (try

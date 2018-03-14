@@ -1,7 +1,7 @@
-(ns mokuhan.renderer-test
+(ns org.panchromatic.mokuhan.renderer-test
   (:require [clojure.test :as t]
-            [mokuhan.ast :as ast]
-            [mokuhan.renderer :as sut]))
+            [org.panchromatic.mokuhan.renderer :as sut]
+            [org.panchromatic.mokuhan.ast :as ast]))
 
 (t/deftest render-escaped-variable-test
   (t/testing "Single path"

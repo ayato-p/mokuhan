@@ -1,4 +1,4 @@
-(ns mokuhan.walker.protocol)
+(ns org.panchromatic.mokuhan.walker.protocol)
 
 (defprotocol Traverser
   (traverse [this path]))
