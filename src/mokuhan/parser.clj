@@ -80,9 +80,14 @@ rest = #'(.|\\r?\\n)*$'
     :open-section (ast/new-standard-section (drop 1 (second v)))
     :open-inverted-section (ast/new-inverted-section (drop 1 (second v)))))
 
-(defn- meta-without-qualifiers [x]
-  (some->> (meta x)
-           (reduce-kv #(assoc %1 (-> %2 name keyword) %3) {})))
+(defn- remove-all-lefts [loc]
+  (let [cnt (count (zip/lefts loc))]
+    (if (zero? cnt)
+      loc
+      (zip/down
+       (reduce (fn [loc _] (zip/remove loc))
+               (zip/left loc)
+               (range cnt))))))
 
 (defn parse
   ([mustache]
