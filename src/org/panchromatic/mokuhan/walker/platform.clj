@@ -18,7 +18,7 @@
   (traverse
     ([m path]
      (let [[p & path] path]
-       (cond-> (.get m p)
+       (cond-> (or (.get m p) (.get m (keyword p)))
          (seq path) (proto/traverse path)))))
 
   java.util.List
@@ -26,11 +26,4 @@
     ([l path]
      (let [[p & path] path]
        (cond-> (.get l p)
-         (seq path) (proto/traverse path)))))
-
-  clojure.lang.IPersistentMap
-  (traverse
-    ([m path]
-     (let [[p & path] path]
-       (cond-> (get m (keyword p))
          (seq path) (proto/traverse path))))))
