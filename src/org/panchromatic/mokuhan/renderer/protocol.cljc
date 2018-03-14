@@ -31,6 +31,10 @@
   (render-section [this section context state]))
 
 (extend-protocol StandardSectionRenderer
+  nil
+  (render-section [_ _ _ _]
+    "")
+
   Object
   (render-section [o section context state]
     (if (misc/truthy? o)
@@ -42,6 +46,10 @@
   (render-inverted-section [this section context state]))
 
 (extend-protocol InvertedSectionRenderer
+  nil
+  (render-section [_ section context state]
+    (render-section-simply section context state))
+
   Object
   (render-inverted-section [o section context state]
     (if-not (misc/truthy? o)

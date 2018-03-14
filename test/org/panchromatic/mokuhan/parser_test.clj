@@ -18,7 +18,6 @@
         (sut/parse* "{{\tx.y\t}}")
         (sut/parse* "{{\nx.y\n}}")))
 
-
     (t/are [src expected] (= expected (sut/parse* src))
       " {{ x }} "
       [[:whitespace " "] [:escaped-variable [:name "x"]] [:whitespace " "]]
@@ -118,6 +117,13 @@
       "{{ x.y }}" [:name "x" "y"]
       "{{x.y.z}}" [:name "x" "y" "z"]
       "{{\n\nx.y.z\n\n}}" [:name "x" "y" "z"]))
+
+  (t/testing "current context"
+    (t/are [src expected] (= expected (find-name (sut/parse* src)))
+      "{{.}}" [:name "."]
+      " {{.}} " [:name "."]
+      "{{ . }}" [:name "."]
+      "{{\n.\n}}" [:name "."]))
 
   (t/testing "illegal names"
     (t/are [src expected] (= expected (sut/parse* src))

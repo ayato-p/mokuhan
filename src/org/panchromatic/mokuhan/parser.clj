@@ -33,7 +33,7 @@ eof = #'\\z'
 
 <tag> = (set-delimiter / comment / section / variable)
 <ident> = #'(?!\\d)[\\w\\Q$%&*-_+=|?<>\\E][\\w\\Q!$%&*-_+=|:?<>\\E]*?(?=\\s|\\.|" (re-quote close) ")'
-name = ident *(<'.'> ident)
+name = (ident *(<'.'> ident) / #'\\.')
 
 <variable> = !section !comment !set-delimiter (escaped-variable / unescaped-variable)
 escaped-variable = !unescaped-variable <#'^" (re-quote open) "'> <*1 #'\\s+'> name <*1 #'\\s+'> <#'" (re-quote close) "'>

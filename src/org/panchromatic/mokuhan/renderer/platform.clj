@@ -1,5 +1,11 @@
 (ns org.panchromatic.mokuhan.renderer.platform
-  (:require [org.panchromatic.mokuhan.renderer.protocol :as proto]))
+  (:require [org.panchromatic.mokuhan.renderer.protocol :as proto]
+            [clojure.set :as set]))
+
+(extend-type clojure.lang.AFunction
+  proto/StandardSectionRenderer
+  (render-section [f section context state]
+    (f (proto/render-section-simply section context state))))
 
 (extend-type java.util.List
   proto/StandardSectionRenderer

@@ -11,19 +11,27 @@
   (traverse
     ([o path]
      (let [[p & path] path]
-       (cond-> (invoke-instance-method o p)
-         (seq path) (proto/traverse path)))))
+       (if (= p ".")
+         o
+         (cond-> (invoke-instance-method o p)
+           (seq path) (proto/traverse path))))))
 
   java.util.Map
   (traverse
     ([m path]
      (let [[p & path] path]
-       (cond-> (or (.get m p) (.get m (keyword p)))
-         (seq path) (proto/traverse path)))))
+       (if (= p ".")
+         m
+         (cond-> (if (.containsKey m p)
+                   (.get m p)
+                   (.get m (keyword p)) )
+           (seq path) (proto/traverse path))))))
 
   java.util.List
   (traverse
     ([l path]
      (let [[p & path] path]
-       (cond-> (.get l p)
-         (seq path) (proto/traverse path))))))
+       (if (= p ".")
+         l
+         (cond-> (.get l p)
+           (seq path) (proto/traverse path)))))))
