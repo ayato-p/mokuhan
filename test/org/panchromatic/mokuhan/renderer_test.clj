@@ -91,4 +91,17 @@
 
       (t/is (= "!!!!" (sut/render v {:x {:y [1 1]}})))
 
-      (t/is (= "Hello!!" (sut/render v {:x {:y #(str "Hello" %)}}))))))
+      (t/is (= "Hello!!" (sut/render v {:x {:y #(str "Hello" %)}})))))
+
+  (t/testing "nested section"
+    (let [v (ast/new-standard-section
+             ["x"]
+             [(ast/new-standard-section
+               ["y"]
+               [(ast/new-text "!!")])])]
+      (t/is (= "!!" (sut/render v {:x {:y true}})))
+      (t/is (= "!!!!" (sut/render v {:x {:y [1 1]}})))
+      (t/is (= "!!!!!!!!" (sut/render v {:x [{:y [1 1]} {:y [1 1]}]})))
+      (t/is (= "!!!!"
+               (sut/render v {:x [{:y []} {:y []}]})
+               (sut/render v {:x [{:y false} {:y false}]}))))))
