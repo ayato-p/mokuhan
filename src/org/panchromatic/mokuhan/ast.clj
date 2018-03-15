@@ -65,18 +65,19 @@
    (InvertedSection. (vec path) contents)))
 
 ;; other
-(defrecord Line [contents]
-  ASTZipper
-  (branch? [this] true)
-  (children [this] contents)
-  (make-node [this children]
-    (Line. contents)))
 
-(defn new-line
-  ([]
-   (new-line ()))
-  ([contents]
-   (Line. contents)))
+(defrecord BeginningOfLine [] ;marker
+  Object
+  (toString [_] ""))
+
+(def beginning-of-line
+  (BeginningOfLine.))
+
+(defn new-beginning-of-line []
+  beginning-of-line)
+
+(defn beginning-of-line? [x]
+  (instance? BeginningOfLine x))
 
 (defrecord Text [content]
   Object
@@ -94,16 +95,6 @@
 
 (defn whitespace? [x]
   (instance? Whitespace x))
-
-(defrecord Newline [content]
-  Object
-  (toString [this] (.toString content)))
-
-(defn new-newline [content]
-  (Newline. content))
-
-(defn newline? [x]
-  (instance? Newline x))
 
 (defrecord Comment [content]
   Object

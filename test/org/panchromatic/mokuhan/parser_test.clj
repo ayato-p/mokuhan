@@ -1,320 +1,497 @@
 (ns org.panchromatic.mokuhan.parser-test
   (:require [clojure.test :as t]
+            [fast-zip.core :as zip]
+            [org.panchromatic.mokuhan.ast :as ast]
             [org.panchromatic.mokuhan.parser :as sut]))
 
 (t/deftest parse-variables-test
   (t/testing "escaped variables"
     (t/is
-     (= [[:escaped-variable [:name "x"]]]
-        (sut/parse* "{{x}}")
-        (sut/parse* "{{ x }}")
-        (sut/parse* "{{\tx\t}}")
-        (sut/parse* "{{\nx\n}}")))
+     (= #org.panchromatic.mokuhan.ast.Mustache
+        {:contents
+         (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
+          #org.panchromatic.mokuhan.ast.EscapedVariable{:path ["x"]}
+          #org.panchromatic.mokuhan.ast.Text{:content ""})}
+        (sut/parse "{{x}}")
+        (sut/parse "{{ x }}")
+        (sut/parse "{{\tx\t}}")
+        (sut/parse "{{\nx\n}}")))
 
     (t/is
-     (= [[:escaped-variable [:name "x" "y"]]]
-        (sut/parse* "{{x.y}}")
-        (sut/parse* "{{ x.y }}")
-        (sut/parse* "{{\tx.y\t}}")
-        (sut/parse* "{{\nx.y\n}}")))
+     (= #org.panchromatic.mokuhan.ast.Mustache
+        {:contents
+         (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
+          #org.panchromatic.mokuhan.ast.EscapedVariable{:path ["x" "y"]}
+          #org.panchromatic.mokuhan.ast.Text{:content ""})}
+        (sut/parse "{{x.y}}")
+        (sut/parse "{{ x.y }}")
+        (sut/parse "{{\tx.y\t}}")
+        (sut/parse "{{\nx.y\n}}")))
 
-    (t/are [src expected] (= expected (sut/parse* src))
-      " {{ x }} "
-      [[:whitespace " "] [:escaped-variable [:name "x"]] [:whitespace " "]]
+    (t/is
+     (= #org.panchromatic.mokuhan.ast.Mustache
+        {:contents
+         (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
+          #org.panchromatic.mokuhan.ast.Whitespace{:content " "}
+          #org.panchromatic.mokuhan.ast.EscapedVariable{:path ["x"]}
+          #org.panchromatic.mokuhan.ast.Whitespace{:content " "}
+          #org.panchromatic.mokuhan.ast.Text{:content ""})}
+        (sut/parse " {{ x }} ")))
 
-      "--{{x}}--"
-      [[:text "--"] [:escaped-variable [:name "x"]] [:text "--"]]
+    (t/is
+     (= #org.panchromatic.mokuhan.ast.Mustache
+        {:contents
+         (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
+          #org.panchromatic.mokuhan.ast.Text{:content "--"}
+          #org.panchromatic.mokuhan.ast.EscapedVariable{:path ["x"]}
+          #org.panchromatic.mokuhan.ast.Text{:content "--"}
+          #org.panchromatic.mokuhan.ast.Text{:content ""})}
+        (sut/parse "--{{x}}--")))
 
-      "}}{{x}}--"
-      [[:text "}}"] [:escaped-variable [:name "x"]] [:text "--"]]
+    (t/is
+     (= #org.panchromatic.mokuhan.ast.Mustache
+        {:contents
+         (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
+          #org.panchromatic.mokuhan.ast.Text{:content "}}"}
+          #org.panchromatic.mokuhan.ast.EscapedVariable{:path ["x"]}
+          #org.panchromatic.mokuhan.ast.Text{:content "--"}
+          #org.panchromatic.mokuhan.ast.Text{:content ""})}
+        (sut/parse "}}{{x}}--")))
 
-      "--{{x}}{{"
-      [[:text "--"] [:escaped-variable [:name "x"]] [:text "{{"]]
+    (t/is
+     (= #org.panchromatic.mokuhan.ast.Mustache
+        {:contents
+         (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
+          #org.panchromatic.mokuhan.ast.Text{:content "--"}
+          #org.panchromatic.mokuhan.ast.EscapedVariable{:path ["x"]}
+          #org.panchromatic.mokuhan.ast.Text{:content "{{"}
+          #org.panchromatic.mokuhan.ast.Text{:content ""})}
+        (sut/parse "--{{x}}{{")))
 
-      "{{x}}}"
-      [[:escaped-variable [:name "x"]] [:text "}"]]
+    (t/is
+     (= #org.panchromatic.mokuhan.ast.Mustache
+        {:contents
+         (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
+          #org.panchromatic.mokuhan.ast.EscapedVariable{:path ["x"]}
+          #org.panchromatic.mokuhan.ast.Text{:content "}"}
+          #org.panchromatic.mokuhan.ast.Text{:content ""})}
+        (sut/parse "{{x}}}")))
 
-      "{{{x}}"
-      [[:text "{"] [:escaped-variable [:name "x"]]]
+    (t/is
+     (= #org.panchromatic.mokuhan.ast.Mustache
+        {:contents
+         (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
+          #org.panchromatic.mokuhan.ast.EscapedVariable{:path ["{x"]}
+          #org.panchromatic.mokuhan.ast.Text{:content ""})}
+        (sut/parse "{{{x}}"))))
 
-      "{{{{x}}}}"
-      [[:text "{"] [:unescaped-variable [:name "x"]] [:text "}"]]))
 
   (t/testing "unescaped variables"
     (t/is
-     (= [[:unescaped-variable [:name "x"]]]
-        (sut/parse* "{{{x}}}")
-        (sut/parse* "{{{ x }}}")
-        (sut/parse* "{{{\tx\t}}}")
-        (sut/parse* "{{{\nx\n}}}")))
+     (= #org.panchromatic.mokuhan.ast.Mustache
+        {:contents
+         (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
+          #org.panchromatic.mokuhan.ast.UnescapedVariable{:path ["x"]}
+          #org.panchromatic.mokuhan.ast.Text{:content ""})}
+        (sut/parse "{{{x}}}")
+        (sut/parse "{{{ x }}}")
+        (sut/parse "{{{\tx\t}}}")
+        (sut/parse "{{{\nx\n}}}")))
 
     (t/is
-     (= [[:unescaped-variable [:name "x" "y"]]]
-        (sut/parse* "{{{x.y}}}")
-        (sut/parse* "{{{ x.y }}}")
-        (sut/parse* "{{{\tx.y\t}}}")
-        (sut/parse* "{{{\nx.y\n}}}")))
+     (= #org.panchromatic.mokuhan.ast.Mustache
+        {:contents
+         (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
+          #org.panchromatic.mokuhan.ast.UnescapedVariable{:path ["x" "y"]}
+          #org.panchromatic.mokuhan.ast.Text{:content ""})}
+        (sut/parse "{{{x.y}}}")
+        (sut/parse "{{{ x.y }}}")
+        (sut/parse "{{{\tx.y\t}}}")
+        (sut/parse "{{{\nx.y\n}}}")))
 
     (t/is
-     (= [[:unescaped-variable [:name "x"]]]
-        (sut/parse* "{{&x}}")
-        (sut/parse* "{{& x }}")
-        (sut/parse* "{{&\tx\t}}")
-        (sut/parse* "{{&\nx\n}}")))
+     (= #org.panchromatic.mokuhan.ast.Mustache
+        {:contents
+         (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
+          #org.panchromatic.mokuhan.ast.UnescapedVariable{:path ["x"]}
+          #org.panchromatic.mokuhan.ast.Text{:content ""})}
+        (sut/parse "{{&x}}")
+        (sut/parse "{{& x }}")
+        (sut/parse "{{&\tx\t}}")
+        (sut/parse "{{&\nx\n}}")))
 
     (t/is
-     (= [[:unescaped-variable [:name "x" "y"]]]
-        (sut/parse* "{{&x.y}}")
-        (sut/parse* "{{& x.y }}")
-        (sut/parse* "{{&\tx.y\t}}")
-        (sut/parse* "{{&\nx.y\n}}")))
+     (= #org.panchromatic.mokuhan.ast.Mustache
+        {:contents
+         (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
+          #org.panchromatic.mokuhan.ast.UnescapedVariable{:path ["x" "y"]}
+          #org.panchromatic.mokuhan.ast.Text{:content ""})}
+        (sut/parse "{{&x.y}}")
+        (sut/parse "{{& x.y }}")
+        (sut/parse "{{&\tx.y\t}}")
+        (sut/parse "{{&\nx.y\n}}")))
 
     (t/is
-     (= [[:whitespace " "] [:unescaped-variable [:name "x"]] [:whitespace " "]]
-        (sut/parse* " {{{x}}} ")
-        (sut/parse* " {{&x}} ")))
+     (= #org.panchromatic.mokuhan.ast.Mustache
+        {:contents
+         (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
+          #org.panchromatic.mokuhan.ast.Whitespace{:content " "}
+          #org.panchromatic.mokuhan.ast.UnescapedVariable{:path ["x"]}
+          #org.panchromatic.mokuhan.ast.Whitespace{:content " "}
+          #org.panchromatic.mokuhan.ast.Text{:content ""})}
+        (sut/parse " {{{x}}} ")
+        (sut/parse " {{&x}} ")))
 
     (t/is
-     (= [[:text "--"] [:unescaped-variable [:name "x"]] [:text "--"]]
-        (sut/parse* "--{{{x}}}--")
-        (sut/parse* "--{{&x}}--")))
+     (= #org.panchromatic.mokuhan.ast.Mustache
+        {:contents
+         (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
+          #org.panchromatic.mokuhan.ast.Text{:content "--"}
+          #org.panchromatic.mokuhan.ast.UnescapedVariable{:path ["x"]}
+          #org.panchromatic.mokuhan.ast.Text{:content "--"}
+          #org.panchromatic.mokuhan.ast.Text{:content ""})}
+        (sut/parse "--{{{x}}}--")
+        (sut/parse "--{{&x}}--")))
 
     (t/is
-     (= [[:text "{"] [:unescaped-variable [:name "x"]] [:text "}"]]
-        (sut/parse* "{{{{x}}}}")))
+     (= #org.panchromatic.mokuhan.ast.Mustache
+        {:contents
+         (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
+          #org.panchromatic.mokuhan.ast.UnescapedVariable{:path ["{x"]}
+          #org.panchromatic.mokuhan.ast.Text{:content "}"}
+          #org.panchromatic.mokuhan.ast.Text{:content ""})}
+        (sut/parse "{{{{x}}}}")))
 
     (t/is
-     (= [[:unescaped-variable [:name "&x"]]]
-        (sut/parse* "{{{ &x }}}")
-        (sut/parse* "{{{&x }}}")))
+     (= #org.panchromatic.mokuhan.ast.Mustache
+        {:contents
+         (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
+          #org.panchromatic.mokuhan.ast.UnescapedVariable{:path ["&x"]}
+          #org.panchromatic.mokuhan.ast.Text{:content ""})}
+        (sut/parse "{{{ &x }}}")))
 
     (t/is
-     (= [[:text "{"] [:unescaped-variable [:name "x"]] [:text "}"]]
-        (sut/parse* "{{{& x }}}")))))
+     (= #org.panchromatic.mokuhan.ast.Mustache
+        {:contents
+         (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
+          #org.panchromatic.mokuhan.ast.UnescapedVariable{:path ["&x"]}
+          #org.panchromatic.mokuhan.ast.Text{:content ""})}
+        (sut/parse "{{{ &x }}}")))
 
-(defn- find-name [vec-or-any]
-  (when (sequential? vec-or-any)
-    (if (= :name (first vec-or-any))
-      vec-or-any
-      (reduce #(when-let [res (find-name %2)]
-                 (reduced res))
-              nil
-              vec-or-any))))
+    (t/is
+     (= #org.panchromatic.mokuhan.ast.Mustache
+        {:contents
+         (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
+          #org.panchromatic.mokuhan.ast.Text{:content "{"}
+          #org.panchromatic.mokuhan.ast.UnescapedVariable{:path ["x"]}
+          #org.panchromatic.mokuhan.ast.Text{:content "}"}
+          #org.panchromatic.mokuhan.ast.Text{:content ""})}
+        (sut/parse "{{{& x }}}")))))
+
+(defn- find-nth-tag [ast n]
+  (loop [loc (ast/ast-zip ast), n n]
+    (when-not (zip/end? loc)
+      (let [node (zip/node loc)]
+        (if ((some-fn ast/variable? ast/section?) node)
+          (if (zero? n)
+            node
+            (recur (zip/next loc) (dec n)))
+          (recur (zip/next loc) n))))))
+
+(defn- find-first-tag [ast]
+  (find-nth-tag ast 0))
 
 (t/deftest parse-name-test
   (t/testing "single name"
-    (t/are [src expected] (= expected (find-name (sut/parse* src)))
-      "{{x}}" [:name "x"]
-      " {{x}} " [:name "x"]
-      "{{ x }}" [:name "x"]
-      "{{\n\nx\n\n}}" [:name "x"]))
-
+    (t/are [src expected] (= expected (.path (find-first-tag (sut/parse src))))
+      "{{x}}" ["x"]
+      " {{x}} " ["x"]
+      "{{ x }}" ["x"]
+      "{{\n\nx\n\n}}" ["x"]))
 
   (t/testing "dotted name"
-    (t/are [src expected] (= expected (find-name (sut/parse* src)))
-      "{{x.y}}" [:name "x" "y"]
-      " {{x.y}} " [:name "x" "y"]
-      "{{ x.y }}" [:name "x" "y"]
-      "{{x.y.z}}" [:name "x" "y" "z"]
-      "{{\n\nx.y.z\n\n}}" [:name "x" "y" "z"]))
+    (t/are [src expected] (= expected (.path (find-first-tag (sut/parse src))))
+      "{{x.y}}" ["x" "y"]
+      " {{x.y}} " ["x" "y"]
+      "{{ x.y }}" ["x" "y"]
+      "{{x.y.z}}" ["x" "y" "z"]
+      "{{\n\nx.y.z\n\n}}" ["x" "y" "z"]))
 
   (t/testing "current context"
-    (t/are [src expected] (= expected (find-name (sut/parse* src)))
-      "{{.}}" [:name "."]
-      " {{.}} " [:name "."]
-      "{{ . }}" [:name "."]
-      "{{\n.\n}}" [:name "."]))
+    (t/are [src expected] (= expected (.path (find-first-tag (sut/parse src))))
+      "{{.}}" ["."]
+      " {{.}} " ["."]
+      "{{ . }}" ["."]
+      "{{\n.\n}}" ["."]))
 
   (t/testing "illegal names"
-    (t/are [src expected] (= expected (sut/parse* src))
-      "{{.x}}" [[:text "{{.x}}"]]
-      "{{x.}}" [[:text "{{x.}}"]]
-      "{{.x.}}" [[:text "{{.x.}}"]]
-      "{{x . y}}" [[:text "{{x"] [:whitespace  " "] [:text  "."]
-                   [:whitespace " "] [:text "y}}"]]
-      "{{x. y}}" [[:text "{{x."] [:whitespace " "] [:text "y}}"]]
-      "{{x .y}}" [[:text "{{x"] [:whitespace " "] [:text ".y}}"]]
-      "{{x}} {{.y}}" [[:escaped-variable [:name "x"]]
-                      [:whitespace  " "] [:text "{{.y}}"]]
-      "{{.x}} {{y}}" [[:text "{{.x}}"] [:whitespace  " "]
-                      [:escaped-variable [:name "y"]]]
-      "{{x}} {{.y}} {{z}}" [[:escaped-variable [:name "x"]]
-                            [:whitespace " "]
-                            [:text "{{.y}}"] [:whitespace " "]
-                            [:escaped-variable [:name "z"]]]
-      "{{.x}} {{y}} {{.z}}" [[:text "{{.x}}"] [:whitespace " "]
-                             [:escaped-variable [:name "y"]]
-                             [:whitespace " "]
-                             [:text "{{.z}}"]])))
+    (t/are [src] (nil? (find-first-tag (sut/parse* src)))
+      "{{.x}}"
+      "{{x.}}"
+      "{{.x.}}"
+      "{{x . y}}"
+      "{{x. y}}"
+      "{{x .y}}")
+
+    (t/is
+     (nil? (find-nth-tag (sut/parse "{{x}} {{.y}}") 1)))
+
+    (t/is
+     (not= ["x"] (.path (find-first-tag (sut/parse "{{.x}} {{y}}")))))
+
+    (t/is (= [["x"] ["z"]]
+             (as-> (sut/parse "{{x}} {{.y}} {{z}}") ast
+               [(.path (find-nth-tag ast 0))
+                (.path (find-nth-tag ast 1))])))
+
+    (t/is (= [["y"] nil]
+             (as-> (sut/parse "{{.x}} {{y}} {{.z}}") ast
+               [(.path (find-nth-tag ast 0))
+                (some-> (find-nth-tag ast 1) .path)])))))
 
 (t/deftest parse-section-test
   (t/testing "standard section"
     (t/is
-     (= [[:open-section [:name "x"]]
-         [:close-section [:name "x"]]]
-        (sut/parse* "{{#x}}{{/x}}")))
+     (= #org.panchromatic.mokuhan.ast.Mustache
+        {:contents
+         (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
+          #org.panchromatic.mokuhan.ast.StandardSection{:path ["x"], :contents nil}
+          #org.panchromatic.mokuhan.ast.Text{:content ""})}
+        (sut/parse "{{#x}}{{/x}}")))
 
     (t/is
-     (= [[:open-section [:name "x" "y"]]
-         [:close-section [:name "x" "y"]]]
-        (sut/parse* "{{#x.y}}{{/x.y}}")))
+     (= #org.panchromatic.mokuhan.ast.Mustache
+        {:contents
+         (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
+          #org.panchromatic.mokuhan.ast.StandardSection{:path ["x" "y"], :contents nil}
+          #org.panchromatic.mokuhan.ast.Text{:content ""})}
+        (sut/parse "{{#x.y}}{{/x.y}}")))
 
     (t/is
-     (= [[:open-section [:name "x"]]
-         [:close-section [:name "y"]]]
-        (sut/parse* "{{#x}}{{/y}}")))
+     (= #org.panchromatic.mokuhan.ast.Mustache
+        {:contents
+         (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
+          #org.panchromatic.mokuhan.ast.StandardSection
+          {:path ["x"],
+           :contents
+           (#org.panchromatic.mokuhan.ast.StandardSection{:path ["y"], :contents nil})}
+          #org.panchromatic.mokuhan.ast.Text{:content ""})}
+        (sut/parse "{{#x}}{{#y}}{{/y}}{{/x}}")))
 
     (t/is
-     (= [[:open-section [:name "x"]]
-         [:open-section [:name "y"]]
-         [:close-section [:name "y"]]
-         [:close-section [:name "x"]]]
-        (sut/parse* "{{#x}}{{#y}}{{/y}}{{/x}}")))
-
-    (t/is
-     (= [[:open-section [:name "x"]]
-         [:text "{"]
-         [:text "{"]
-         [:close-section [:name "x"]]]
-        (sut/parse* "{{#x}}{{{{/x}}")))
-
-    (t/is
-     (= [[:open-section [:name "x"]]
-         [:text "}}"]
-         [:close-section [:name "x"]]]
-        (sut/parse* "{{#x}}}}{{/x}}"))))
+     (= #org.panchromatic.mokuhan.ast.Mustache
+        {:contents
+         (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
+          #org.panchromatic.mokuhan.ast.StandardSection
+          {:path ["x"],
+           :contents (#org.panchromatic.mokuhan.ast.Text{:content "}}"})}
+          #org.panchromatic.mokuhan.ast.Text{:content ""})}
+        (sut/parse "{{#x}}}}{{/x}}"))))
 
   (t/testing "inverted section"
     (t/is
-     (= [[:open-inverted-section [:name "x"]]
-         [:close-section [:name "x"]]]
-        (sut/parse* "{{^x}}{{/x}}")))
+     (= #org.panchromatic.mokuhan.ast.Mustache
+        {:contents
+         (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
+          #org.panchromatic.mokuhan.ast.InvertedSection{:path ["x"], :contents nil}
+          #org.panchromatic.mokuhan.ast.Text{:content ""})}
+        (sut/parse "{{^x}}{{/x}}")))
 
     (t/is
-     (= [[:open-inverted-section [:name "x" "y"]]
-         [:close-section [:name "x" "y"]]]
-        (sut/parse* "{{^x.y}}{{/x.y}}")))
-
-    (t/is
-     (= [[:open-section [:name "x"]]
-         [:close-section [:name "y"]]]
-        (sut/parse* "{{#x}}{{/y}}"))))
+     (= #org.panchromatic.mokuhan.ast.Mustache
+        {:contents
+         (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
+          #org.panchromatic.mokuhan.ast.InvertedSection{:path ["x" "y"], :contents nil}
+          #org.panchromatic.mokuhan.ast.Text{:content ""})}
+        (sut/parse "{{^x.y}}{{/x.y}}"))))
 
   (t/testing "unopened section"
     (t/is
-     (= [[:close-section [:name "x"]]]
-        (sut/parse* "{{/x}}")))
+     (thrown-with-msg?
+      clojure.lang.ExceptionInfo #"Unopened section"
+      (sut/parse "{{/x}}")))
 
     (t/is
-     (= [[:escaped-variable [:name "x"]]
-         [:close-section [:name "x"]]]
-        (sut/parse* "{{x}}{{/x}}"))))
+     (thrown-with-msg?
+      clojure.lang.ExceptionInfo #"Unopened section"
+      (sut/parse "{{x}}{{/x}}"))))
 
   (t/testing "unclosed section"
     (t/is
-     (= [[:open-section [:name "x"]]]
-        (sut/parse* "{{#x}}")))
+     (thrown-with-msg?
+      clojure.lang.ExceptionInfo #"Unclosed section"
+      (sut/parse "{{#x}}")))
 
     (t/is
-     (= [[:open-section [:name "x"]]
-         [:escaped-variable [:name "x"]]]
-        (sut/parse* "{{#x}}{{x}}")))
+     (thrown-with-msg?
+      clojure.lang.ExceptionInfo #"Unclosed section"
+      (sut/parse "{{#x}}{{x}}")))
 
     (t/is
-     (= [[:open-inverted-section [:name "x"]]]
-        (sut/parse* "{{^x}}")))
+     (thrown-with-msg?
+      clojure.lang.ExceptionInfo #"Unclosed section"
+      (sut/parse "{{^x}}")))
 
     (t/is
-     (= [[:open-inverted-section [:name "x"]]
-         [:escaped-variable [:name "x"]]]
-        (sut/parse* "{{^x}}{{x}}")))))
+     (thrown-with-msg?
+      clojure.lang.ExceptionInfo #"Unclosed section"
+      (sut/parse "{{^x}}{{x}}")))))
 
 (t/deftest parse-comment-test
   (t/is
-   (= [[:comment "x"]]
-      (sut/parse* "{{!x}}")))
+   (= #org.panchromatic.mokuhan.ast.Mustache
+      {:contents
+       (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
+        #org.panchromatic.mokuhan.ast.Comment{:content "x"}
+        #org.panchromatic.mokuhan.ast.Text{:content ""})}
+      (sut/parse "{{!x}}")))
 
   (t/is
-   (= [[:comment " x "]]
-      (sut/parse* "{{! x }}")))
+   (= #org.panchromatic.mokuhan.ast.Mustache
+      {:contents
+       (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
+        #org.panchromatic.mokuhan.ast.Comment{:content " x "}
+        #org.panchromatic.mokuhan.ast.Text{:content ""})}
+      (sut/parse "{{! x }}")))
 
   (t/is
-   (= [[:comment "\n\nx\n\n"]]
-      (sut/parse* "{{!\n\nx\n\n}}")))
+   (= #org.panchromatic.mokuhan.ast.Mustache
+      {:contents
+       (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
+        #org.panchromatic.mokuhan.ast.Comment{:content "\n\nx\n\n"}
+        #org.panchromatic.mokuhan.ast.Text{:content ""})}
+      (sut/parse "{{!\n\nx\n\n}}")))
 
   (t/is
-   (= [[:comment " x y z "]]
-      (sut/parse* "{{! x y z }}")))
+   (=  #org.panchromatic.mokuhan.ast.Mustache
+       {:contents
+        (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
+         #org.panchromatic.mokuhan.ast.Comment{:content " x y z " }
+         #org.panchromatic.mokuhan.ast.Text{:content ""})}
+       (sut/parse "{{! x y z }}")))
 
   (t/is
-   (= [[:comment " x {{x"] [:text "}}"]]
-      (sut/parse* "{{! x {{x}}}}")))
+   (= #org.panchromatic.mokuhan.ast.Mustache
+      {:contents
+       (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
+        #org.panchromatic.mokuhan.ast.Comment{:content " x {{x"}
+        #org.panchromatic.mokuhan.ast.Text{:content "}}"}
+        #org.panchromatic.mokuhan.ast.Text{:content ""})}
+      (sut/parse "{{! x {{x}}}}")))
 
   (t/is
-   (= [[:comment  "{{x"] [:whitespace " "] [:text "x}}"]]
-      (sut/parse* "{{!{{x}} x}}"))))
+   (= #org.panchromatic.mokuhan.ast.Mustache
+      {:contents
+       (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
+        #org.panchromatic.mokuhan.ast.Comment{:content "{{x"}
+        #org.panchromatic.mokuhan.ast.Whitespace{:content " "}
+        #org.panchromatic.mokuhan.ast.Text{:content "x}}"}
+        #org.panchromatic.mokuhan.ast.Text{:content ""})}
+      (sut/parse "{{!{{x}} x}}"))))
 
 (t/deftest parse-set-delimiter-test
-  (t/is (= [[:set-delimiter [:new-open-delimiter "<<"] [:new-close-delimiter ">>"]]]
-           (sut/parse* "{{=<< >>=}}")))
+  (t/is (= #org.panchromatic.mokuhan.ast.Mustache
+           {:contents
+            (#org.panchromatic.mokuhan.ast.BeginningOfLine{})}
+           (sut/parse "{{=<< >>=}}")))
 
-  (t/is (= [[:set-delimiter [:new-open-delimiter "{%"] [:new-close-delimiter "%}"]]]
-           (sut/parse* "{{={% %}=}}")))
+  (t/is (= #org.panchromatic.mokuhan.ast.Mustache
+           {:contents
+            (#org.panchromatic.mokuhan.ast.BeginningOfLine{})}
+           (sut/parse "{{={% %}=}}")))
 
-  (t/is (= [[:set-delimiter [:new-open-delimiter "%"] [:new-close-delimiter "%"]]]
-           (sut/parse* "{{= % % =}}")))
+  (t/is (= #org.panchromatic.mokuhan.ast.Mustache
+           {:contents
+            (#org.panchromatic.mokuhan.ast.BeginningOfLine{})}
+           (sut/parse "{{= % % =}}")))
 
-  (t/is (= [[:set-delimiter [:new-open-delimiter "%"] [:new-close-delimiter "%"] [:rest "{{x}}"]]]
-           (sut/parse* "{{=% %=}}{{x}}")))
+  (t/is (= #org.panchromatic.mokuhan.ast.Mustache
+           {:contents
+            (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
+             #org.panchromatic.mokuhan.ast.Text{:content "{{x}}"}
+             #org.panchromatic.mokuhan.ast.Text{:content ""})}
+           (sut/parse "{{=% %=}}{{x}}")))
 
-  (t/is (= [[:set-delimiter [:new-open-delimiter "%"] [:new-close-delimiter "%"] [:rest "=}}"]]]
-           (sut/parse* "{{=% %=}}=}}"))))
+  (t/is (= #org.panchromatic.mokuhan.ast.Mustache
+           {:contents
+            (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
+             #org.panchromatic.mokuhan.ast.Text{:content "=}}"}
+             #org.panchromatic.mokuhan.ast.Text{:content ""})}
+           (sut/parse "{{=% %=}}=}}")))
+
+  (t/is (= #org.panchromatic.mokuhan.ast.Mustache
+           {:contents
+            (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
+             #org.panchromatic.mokuhan.ast.EscapedVariable{:path ["x"]}
+             #org.panchromatic.mokuhan.ast.Text{:content ""})}
+           (sut/parse "{{=% %=}}\n%x%")
+           #org.panchromatic.mokuhan.ast.Mustache
+           {:contents
+            (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
+             #org.panchromatic.mokuhan.ast.EscapedVariable{:path ["x"]}
+             #org.panchromatic.mokuhan.ast.Text{:content ""})})))
 
 (t/deftest parse-newline-test
-  (t/is (= [[:newline "\n"]]
-           (sut/parse* "\n")))
+  (t/is (= #org.panchromatic.mokuhan.ast.Mustache
+           {:contents
+            (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
+             #org.panchromatic.mokuhan.ast.Text{:content "\n"})}
+           (sut/parse "\n")))
 
-  (t/is (= [[:newline "\r\n"]]
-           (sut/parse* "\r\n"))))
+  (t/is (= #org.panchromatic.mokuhan.ast.Mustache
+           {:contents
+            (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
+             #org.panchromatic.mokuhan.ast.Text{:content "\r\n"})}
+           (sut/parse "\r\n"))))
 
 (t/deftest parser-test
   (t/is
    (= #org.panchromatic.mokuhan.ast.Mustache
       {:contents
-       (#org.panchromatic.mokuhan.ast.EscapedVariable{:path ["x"]}
+       (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
+        #org.panchromatic.mokuhan.ast.EscapedVariable{:path ["x"]}
         #org.panchromatic.mokuhan.ast.Whitespace{:content " "}
         #org.panchromatic.mokuhan.ast.EscapedVariable{:path ["y"]}
         #org.panchromatic.mokuhan.ast.Whitespace{:content " "}
-        #org.panchromatic.mokuhan.ast.EscapedVariable{:path ["z"]})}
+        #org.panchromatic.mokuhan.ast.EscapedVariable{:path ["z"]}
+        #org.panchromatic.mokuhan.ast.Text{:content ""})}
       (sut/parse "{{x}} {{y}} {{z}}")))
 
   (t/is
    (= #org.panchromatic.mokuhan.ast.Mustache
       {:contents
-       (#org.panchromatic.mokuhan.ast.StandardSection
+       (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
+        #org.panchromatic.mokuhan.ast.StandardSection
         {:path ["person"],
          :contents
          (#org.panchromatic.mokuhan.ast.Whitespace{:content " "}
           #org.panchromatic.mokuhan.ast.EscapedVariable{:path ["name"]}
-          #org.panchromatic.mokuhan.ast.Whitespace{:content " "}
-          nil)})}
+          #org.panchromatic.mokuhan.ast.Whitespace{:content " "})}
+        #org.panchromatic.mokuhan.ast.Text{:content ""})}
       (sut/parse "{{#person}} {{name}} {{/person}}")))
 
+  (mapcat #(map inc %) [(range 10)(range 10)])
+
   (t/is
-   (= (sut/parse "{{^person}} Nothing {{/person}}")
-      #org.panchromatic.mokuhan.ast.Mustache
+   (= #org.panchromatic.mokuhan.ast.Mustache
       {:contents
-       (#org.panchromatic.mokuhan.ast.InvertedSection
+       (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
+        #org.panchromatic.mokuhan.ast.InvertedSection
         {:path ["person"],
          :contents
          (#org.panchromatic.mokuhan.ast.Whitespace{:content " "}
           #org.panchromatic.mokuhan.ast.Text{:content "Nothing"}
-          #org.panchromatic.mokuhan.ast.Whitespace{:content " "}
-          nil)})}))
+          #org.panchromatic.mokuhan.ast.Whitespace{:content " "})}
+        #org.panchromatic.mokuhan.ast.Text{:content ""})}
+      (sut/parse "{{^person}} Nothing {{/person}}")))
 
   (t/is (thrown-with-msg?
          clojure.lang.ExceptionInfo #"Unopened section"
          (sut/parse "{{name}} {{/person}}")))
+
+  (t/is (thrown-with-msg?
+         clojure.lang.ExceptionInfo #"Unopened section"
+         (sut/parse "{{#x}}{{/y}}")))
 
   (t/is (thrown-with-msg?
          clojure.lang.ExceptionInfo #"Unclosed section"
@@ -322,4 +499,10 @@
 
   (t/is (thrown-with-msg?
          clojure.lang.ExceptionInfo #"Unclosed section"
-         (sut/parse "{{^person}} Nothing "))))
+         (sut/parse "{{^person}} Nothing ")))
+
+  (t/is (thrown-with-msg?
+         clojure.lang.ExceptionInfo #"Unclosed section"
+         (sut/parse "{{#x}}{{{{/x}}")))
+
+  )
