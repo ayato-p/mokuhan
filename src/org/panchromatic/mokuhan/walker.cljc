@@ -7,11 +7,15 @@
 
 (defn traverse
   ([x path]
-   (proto/traverse x path))
+   (let [x (proto/traverse x path)]
+     (cond-> x
+       (proto/found-key? x) (.value))))
+
   ([x path position]
-   (loop [position position]
-     (if (seq position)
-       (or (-> (traverse x position)
-               (traverse path))
-           (recur (pop position)))
-       (traverse x path)))))
+   (let [x (loop [position position]
+             (if (seq position)
+               (or (-> (proto/traverse x position)
+                       (proto/traverse path))
+                   (recur (pop position)))
+               (proto/traverse x path)))]
+     (cond-> x (proto/found-key? x) (.value)))))

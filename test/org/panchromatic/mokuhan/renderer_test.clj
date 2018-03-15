@@ -12,6 +12,10 @@
       (t/testing "Integer"
         (t/is (= "42" (sut/render v {:x 42}))))
 
+      (t/testing "Boolean"
+        (t/is (= "true" (sut/render v {:x true})))
+        (t/is (= "false" (sut/render v {:x false}))))
+
       (t/testing "HTML string"
         (t/is (= "&amp;&lt;&gt;&#39;&quot;" (sut/render v {:x "&<>'\""}))))
 
@@ -20,6 +24,9 @@
 
       (t/testing "Vector"
         (t/is (= "[1 2]" (sut/render v {:x [1 2]}))))
+
+      (t/testing "Object"
+        (t/is (= "object!" (sut/render v {:x (reify Object (toString [this] "object!"))}))))
 
       (t/testing "nil"
         (t/is (= "" (sut/render v {:x nil}))))
@@ -35,6 +42,10 @@
       (t/testing "Integer"
         (t/is (= "42" (sut/render v {:x {:y 42}}))))
 
+      (t/testing "Boolean"
+        (t/is (= "true" (sut/render v {:x {:y true}})))
+        (t/is (= "false" (sut/render v {:x {:y false}}))))
+
       (t/testing "HTML string"
         (t/is (= "&amp;&lt;&gt;&#39;&quot;" (sut/render v {:x {:y "&<>'\""}}))))
 
@@ -49,6 +60,12 @@
 
       (t/testing "missing"
         (t/is (= "" (sut/render v {:x {}}))))))
+
+  (t/testing "Include index of list"
+    (let [v (ast/new-escaped-variable ["x" 1 "y"])]
+      (t/is (= "42" (sut/render v {:x [{:y 41} {:y 42}]})))
+
+      (t/is (= "" (sut/render v {:x [{:y 41}]})))))
 
   (t/testing "Dot"
     (let [v (ast/new-escaped-variable ["."])]
@@ -103,5 +120,15 @@
       (t/is (= "!!!!" (sut/render v {:x {:y [1 1]}})))
       (t/is (= "!!!!!!!!" (sut/render v {:x [{:y [1 1]} {:y [1 1]}]})))
       (t/is (= "!!!!"
-               (sut/render v {:x [{:y []} {:y []}]})
-               (sut/render v {:x [{:y false} {:y false}]}))))))
+               (sut/render v {:x [{:y [1 1]} {:y []}]})
+               (sut/render v {:x [{:y true} {:y false} {:y true}]})))))
+
+  (t/testing "nested and don't use outer key"
+    (let [v (ast/new-mustache
+             [(ast/new-standard-section
+               ["x"]
+               [(ast/new-standard-section
+                 ["y"]
+                 [(ast/new-text "Hello")])])])]
+      (t/is (= "" (sut/render v {:x [{:y false}]
+                                 :y true}))))))
