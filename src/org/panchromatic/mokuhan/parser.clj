@@ -82,7 +82,8 @@ rest = #'(.|\\r?\\n)*$'")))
         "#" (ast/new-standard-section path)
         ;; "/"
         "^" (ast/new-inverted-section path)
-        ;; ">" partial
+        ;; todo
+        ">" nil
         ))))
 
 (defn- remove-left-whitespaces [loc]
@@ -90,7 +91,7 @@ rest = #'(.|\\r?\\n)*$'")))
     (if (zero? cnt)
       loc
       (reduce (fn [loc n]
-                (if (ast/beginning-of-line? (zip/node loc))
+                (if-not (ast/whitespace? (zip/node loc))
                   (reduced (zip/rightmost loc))
                   (cond-> (zip/remove loc)
                     (zero? n) zip/down)))
@@ -125,7 +126,7 @@ rest = #'(.|\\r?\\n)*$'")))
                       (cond->> parsed standalone? (drop 2)) ;; `drop 2` means remove EOL&BOL
                       (-> state
                           (update :stack conj path)
-                          (assoc :standalone? false))))
+                          (assoc :standalone? standalone?))))
 
              "/" ;; close secion
              (if (= (peek (:stack state)) path)
@@ -140,7 +141,7 @@ rest = #'(.|\\r?\\n)*$'")))
                         (cond->> parsed standalone? (drop 2))
                         (-> state
                             (update :stack pop)
-                            (assoc :standalone? false))))
+                            (assoc :standalone? standalone?))))
                (throw (ex-info "Unopened section"
                                {:type ::unopend-section
                                 :tag path
@@ -156,18 +157,34 @@ rest = #'(.|\\r?\\n)*$'")))
                parsed (->> (parse* rest-of-mustache {:parser parser})
                            (drop 1) ;; don't need BOL
                            )
-               standalone? (and (:standalone? state) (= :end-of-line (ffirst parsed)))]
-           (recur (cond-> loc standalone? remove-left-whitespaces)
+               standalone? (and (:standalone? state)
+                                (or (= :end-of-line (ffirst parsed)) (empty? parsed)))
+               loc (-> loc
+                       (zip/append-child nil) ;; anchor
+                       zip/down
+                       zip/rightmost
+                       (cond-> standalone? remove-left-whitespaces))
+               leftmost? (zero? (count (zip/lefts loc)))]
+           (recur (-> loc zip/remove (cond-> (not leftmost?) zip/up))
                   (cond->> parsed standalone? (drop 2))
-                  state))
+                  (assoc state :standalone? standalone?)))
 
-         (:whitespace :comment)
+         :comment-tag
          (let [standalone? (and (:standalone? state) (= :end-of-line (ffirst parsed)))]
-           (recur (-> loc (zip/append-child (vec->ast-node elm))
-                      (cond-> standalone? remove-left-whitespaces))
+           (recur (-> loc
+                      (zip/append-child (vec->ast-node elm))
+                      zip/down
+                      zip/rightmost
+                      (cond-> standalone? remove-left-whitespaces)
+                      zip/up)
                   (cond->> parsed standalone? (drop 2))
-                  ;; keep current state
-                  state))
+                  (assoc state :standalone? standalone?)))
+
+         :whitespace
+         (recur (-> loc (zip/append-child (vec->ast-node elm)))
+                parsed
+                ;; keep current state
+                state)
 
          :beginning-of-line
          (recur (-> loc (zip/append-child (vec->ast-node elm)))

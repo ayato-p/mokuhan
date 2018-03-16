@@ -5,17 +5,25 @@
 ;; don't remove platform ns via ns clean-up
 ::platform/require
 
+(defn- path-candidates [path]
+  (let [v (peek path)
+        path (pop path)]
+    (-> (->> (map #(subvec path % (count path)) (range (count path)))
+             (mapcat #(let [length (count %)]
+                        (->> (for [sep (reverse (range length))]
+                               (for [p (if (zero? sep) (take 1 %) (subvec % sep length))]
+                                 (conj (subvec % 0 sep) p)))
+                             (apply concat))))
+             (map #(conj % v)))
+        (concat `([~v])))))
+
 (defn traverse
   ([x path]
-   (let [x (proto/traverse x path)]
-     (cond-> x
-       (proto/found-key? x) (.value))))
+   (loop [[path & candidates] (path-candidates (vec path))]
+     (when path
+       (if-let [x (proto/traverse x path)]
+         (cond-> x (proto/found-key? x) (.value))
+         (recur candidates)))))
 
   ([x path position]
-   (let [x (loop [position position]
-             (if (seq position)
-               (or (-> (proto/traverse x position)
-                       (proto/traverse path))
-                   (recur (pop position)))
-               (proto/traverse x path)))]
-     (cond-> x (proto/found-key? x) (.value)))))
+   (traverse x (into (vec position) path))))

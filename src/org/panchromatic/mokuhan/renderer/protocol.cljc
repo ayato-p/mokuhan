@@ -47,7 +47,7 @@
 
 (extend-protocol InvertedSectionRenderer
   nil
-  (render-section [_ section context state]
+  (render-inverted-section [_ section context state]
     (render-section-simply section context state))
 
   Object

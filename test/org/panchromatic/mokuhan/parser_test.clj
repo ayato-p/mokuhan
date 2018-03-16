@@ -342,32 +342,28 @@
    (= #org.panchromatic.mokuhan.ast.Mustache
       {:contents
        (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
-        #org.panchromatic.mokuhan.ast.Comment{:content "x"}
-        #org.panchromatic.mokuhan.ast.Text{:content ""})}
+        #org.panchromatic.mokuhan.ast.Comment{:content "x"})}
       (sut/parse "{{!x}}")))
 
   (t/is
    (= #org.panchromatic.mokuhan.ast.Mustache
       {:contents
        (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
-        #org.panchromatic.mokuhan.ast.Comment{:content " x "}
-        #org.panchromatic.mokuhan.ast.Text{:content ""})}
+        #org.panchromatic.mokuhan.ast.Comment{:content " x "})}
       (sut/parse "{{! x }}")))
 
   (t/is
    (= #org.panchromatic.mokuhan.ast.Mustache
       {:contents
        (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
-        #org.panchromatic.mokuhan.ast.Comment{:content "\n\nx\n\n"}
-        #org.panchromatic.mokuhan.ast.Text{:content ""})}
+        #org.panchromatic.mokuhan.ast.Comment{:content "\n\nx\n\n"})}
       (sut/parse "{{!\n\nx\n\n}}")))
 
   (t/is
    (=  #org.panchromatic.mokuhan.ast.Mustache
        {:contents
         (#org.panchromatic.mokuhan.ast.BeginningOfLine{}
-         #org.panchromatic.mokuhan.ast.Comment{:content " x y z " }
-         #org.panchromatic.mokuhan.ast.Text{:content ""})}
+         #org.panchromatic.mokuhan.ast.Comment{:content " x y z " })}
        (sut/parse "{{! x y z }}")))
 
   (t/is

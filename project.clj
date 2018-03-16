@@ -7,4 +7,9 @@
                  [fast-zip "0.7.0"]]
 
   :profiles
-  {:provided {:dependencies [[org.clojure/clojure "1.9.0"]]}})
+  {:provided
+   {:dependencies [[org.clojure/clojure "1.9.0"]]}
+
+   :dev
+   {:dependencies [[cheshire "5.8.0"]
+                   [clj-http "3.8.0"]]}})
