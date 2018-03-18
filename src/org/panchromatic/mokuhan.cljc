@@ -8,4 +8,4 @@
 
   ([mustache data opts]
    (-> (parser/parse mustache)
-       (renderer/render data))))
+       (renderer/render data {:render #(render % data opts)}))))

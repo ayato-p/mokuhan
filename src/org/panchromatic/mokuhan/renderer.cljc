@@ -57,7 +57,12 @@
         (proto/render-inverted-section section context state))))
 
 (def ^:private initial-state
-  {:position []})
+  {:position []
+   :render identity})
 
-(defn render [ast context]
-  (proto/render ast context initial-state))
+(defn render
+  ([ast context]
+   (render ast context initial-state))
+  ([ast context state]
+   (->> (merge initial-state state)
+        (proto/render ast context))))

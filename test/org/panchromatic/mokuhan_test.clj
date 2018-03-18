@@ -6,7 +6,22 @@
             [org.panchromatic.mokuhan :as sut]))
 
 (defn- get-spec [url]
-  (walk/keywordize-keys (c/decode (:body (http/get url)))))
+  (c/decode (:body (http/get url)) true))
+
+(defn- has-lambda? [m]
+  (let [lambda? (atom false)]
+    (walk/prewalk
+     #(do (when (and (map? %) (= "code" (:__tag__ %)))
+            (prn (type lambda?))
+            (reset! lambda? true))
+          %)
+     m)
+    @lambda?))
+
+(defn- replace-code-map-to-fn [m]
+  (if (and (map? m) (= "code" (:__tag__ m)))
+    (eval (read-string (:clojure m)))
+    m))
 
 (defmacro generate-test-cases-from-spec [which-spec]
   (let [url (str "https://raw.githubusercontent.com/mustache/spec/master/specs/" which-spec ".json")
@@ -15,7 +30,11 @@
        ~@(for [test (:tests spec)]
            `(t/testing ~(str (:name test) " / " (:desc test))
               (t/is (= ~(:expected test)
-                       (sut/render ~(:template test) ~(:data test)))))))))
+                       ~(if-not (has-lambda? test)
+                          `(sut/render ~(:template test) ~(:data test))
+                          `(sut/render ~(:template test)
+                                       (let [data# ~(:data test)]
+                                         (walk/prewalk replace-code-map-to-fn data#)))))))))))
 
 ;; (generate-test-cases-from-spec comments)
 
@@ -887,183 +906,231 @@
 
 ;; (generate-test-cases-from-spec %7Elambdas)
 
-(comment
-  (t/deftest lambdas-test
-
-    (t/testing
-        "Interpolation / A lambda's return value should be interpolated."
-      (t/is
-       (=
-        "Hello, world!"
-        (sut/render
-         "Hello, {{lambda}}!"
-         {:lambda
-          {:php "return \"world\";",
-           :clojure "(fn [] \"world\")",
-           :__tag__ "code",
-           :perl "sub { \"world\" }",
-           :python "lambda: \"world\"",
-           :ruby "proc { \"world\" }",
-           :js "function() { return \"world\" }"}}))))
-
-    (t/testing
-        "Interpolation - Expansion / A lambda's return value should be parsed."
-      (t/is
-       (=
-        "Hello, world!"
-        (sut/render
-         "Hello, {{lambda}}!"
-         {:planet "world",
-          :lambda
-          {:php "return \"{{planet}}\";",
-           :clojure "(fn [] \"{{planet}}\")",
-           :__tag__ "code",
-           :perl "sub { \"{{planet}}\" }",
-           :python "lambda: \"{{planet}}\"",
-           :ruby "proc { \"{{planet}}\" }",
-           :js "function() { return \"{{planet}}\" }"}}))))
-
-    (t/testing
-        "Interpolation - Alternate Delimiters / A lambda's return value should parse with the default delimiters."
-      (t/is
-       (=
-        "Hello, (|planet| => world)!"
-        (sut/render
-         "{{= | | =}}\nHello, (|&lambda|)!"
-         {:planet "world",
-          :lambda
-          {:php "return \"|planet| => {{planet}}\";",
-           :clojure "(fn [] \"|planet| => {{planet}}\")",
-           :__tag__ "code",
-           :perl "sub { \"|planet| => {{planet}}\" }",
-           :python "lambda: \"|planet| => {{planet}}\"",
-           :ruby "proc { \"|planet| => {{planet}}\" }",
-           :js
-           "function() { return \"|planet| => {{planet}}\" }"}}))))
-
-    (t/testing
-        "Interpolation - Multiple Calls / Interpolated lambdas should not be cached."
-      (t/is
-       (=
-        "1 == 2 == 3"
-        (sut/render
-         "{{lambda}} == {{{lambda}}} == {{lambda}}"
-         {:lambda
-          {:php "global $calls; return ++$calls;",
-           :clojure "(def g (atom 0)) (fn [] (swap! g inc))",
-           :__tag__ "code",
-           :perl "sub { no strict; $calls += 1 }",
-           :python
-           "lambda: globals().update(calls=globals().get(\"calls\",0)+1) or calls",
-           :ruby "proc { $calls ||= 0; $calls += 1 }",
-           :js
-           "function() { return (g=(function(){return this})()).calls=(g.calls||0)+1 }"}}))))
-
-    (t/testing
-        "Escaping / Lambda results should be appropriately escaped."
-      (t/is
-       (=
-        "<&gt;>"
-        (sut/render
-         "<{{lambda}}{{{lambda}}}"
-         {:lambda
-          {:php "return \">\";",
-           :clojure "(fn [] \">\")",
-           :__tag__ "code",
-           :perl "sub { \">\" }",
-           :python "lambda: \">\"",
-           :ruby "proc { \">\" }",
-           :js "function() { return \">\" }"}}))))
-
-    (t/testing
-        "Section / Lambdas used for sections should receive the raw section string."
-      (t/is
-       (=
-        "<yes>"
-        (sut/render
-         "<{{#lambda}}{{x}}{{/lambda}}>"
-         {:x "Error!",
-          :lambda
-          {:php "return ($text == \"{{x}}\") ? \"yes\" : \"no\";",
-           :clojure
-           "(fn [text] (if (= text \"{{x}}\") \"yes\" \"no\"))",
-           :__tag__ "code",
-           :perl "sub { $_[0] eq \"{{x}}\" ? \"yes\" : \"no\" }",
-           :python
-           "lambda text: text == \"{{x}}\" and \"yes\" or \"no\"",
-           :ruby
-           "proc { |text| text == \"{{x}}\" ? \"yes\" : \"no\" }",
-           :js
-           "function(txt) { return (txt == \"{{x}}\" ? \"yes\" : \"no\") }"}}))))
-
-    (t/testing
-        "Section - Expansion / Lambdas used for sections should have their results parsed."
-      (t/is
-       (=
-        "<-Earth->"
-        (sut/render
-         "<{{#lambda}}-{{/lambda}}>"
-         {:planet "Earth",
-          :lambda
-          {:php "return $text . \"{{planet}}\" . $text;",
-           :clojure "(fn [text] (str text \"{{planet}}\" text))",
-           :__tag__ "code",
-           :perl "sub { $_[0] . \"{{planet}}\" . $_[0] }",
-           :python "lambda text: \"%s{{planet}}%s\" % (text, text)",
-           :ruby "proc { |text| \"#{text}{{planet}}#{text}\" }",
-           :js
-           "function(txt) { return txt + \"{{planet}}\" + txt }"}}))))
-
-    (t/testing
-        "Section - Alternate Delimiters / Lambdas used for sections should parse with the current delimiters."
-      (t/is
-       (=
-        "<-{{planet}} => Earth->"
-        (sut/render
-         "{{= | | =}}<|#lambda|-|/lambda|>"
-         {:planet "Earth",
-          :lambda
-          {:php "return $text . \"{{planet}} => |planet|\" . $text;",
-           :clojure
-           "(fn [text] (str text \"{{planet}} => |planet|\" text))",
-           :__tag__ "code",
-           :perl "sub { $_[0] . \"{{planet}} => |planet|\" . $_[0] }",
-           :python
-           "lambda text: \"%s{{planet}} => |planet|%s\" % (text, text)",
-           :ruby
-           "proc { |text| \"#{text}{{planet}} => |planet|#{text}\" }",
-           :js
-           "function(txt) { return txt + \"{{planet}} => |planet|\" + txt }"}}))))
-
-    (t/testing
-        "Section - Multiple Calls / Lambdas used for sections should not be cached."
-      (t/is
-       (=
-        "__FILE__ != __LINE__"
-        (sut/render
-         "{{#lambda}}FILE{{/lambda}} != {{#lambda}}LINE{{/lambda}}"
-         {:lambda
-          {:php "return \"__\" . $text . \"__\";",
-           :clojure "(fn [text] (str \"__\" text \"__\"))",
-           :__tag__ "code",
-           :perl "sub { \"__\" . $_[0] . \"__\" }",
-           :python "lambda text: \"__%s__\" % (text)",
-           :ruby "proc { |text| \"__#{text}__\" }",
-           :js "function(txt) { return \"__\" + txt + \"__\" }"}}))))
-
-    (t/testing
-        "Inverted Section / Lambdas used for inverted sections should be considered truthy."
-      (t/is
-       (=
-        "<>"
-        (sut/render
-         "<{{^lambda}}{{static}}{{/lambda}}>"
-         {:static "static",
-          :lambda
-          {:php "return false;",
-           :clojure "(fn [text] false)",
-           :__tag__ "code",
-           :perl "sub { 0 }",
-           :python "lambda text: 0",
-           :ruby "proc { |text| false }",
-           :js "function(txt) { return false }"}}))))))
+(t/deftest lambdas-test
+  (t/testing
+      "Interpolation / A lambda's return value should be interpolated."
+    (t/is
+     (=
+      "Hello, world!"
+      (sut/render
+       "Hello, {{lambda}}!"
+       (let [data__62344__auto__ {:lambda
+                                  {:php "return \"world\";",
+                                   :clojure "(fn [] \"world\")",
+                                   :__tag__ "code",
+                                   :perl "sub { \"world\" }",
+                                   :python "lambda: \"world\"",
+                                   :ruby "proc { \"world\" }",
+                                   :js
+                                   "function() { return \"world\" }"}}]
+         (walk/prewalk
+          replace-code-map-to-fn
+          data__62344__auto__))))))
+  (t/testing
+      "Interpolation - Expansion / A lambda's return value should be parsed."
+    (t/is
+     (=
+      "Hello, world!"
+      (sut/render
+       "Hello, {{lambda}}!"
+       (let [data__62344__auto__ {:planet "world",
+                                  :lambda
+                                  {:php "return \"{{planet}}\";",
+                                   :clojure
+                                   "(fn [] \"{{planet}}\")",
+                                   :__tag__ "code",
+                                   :perl "sub { \"{{planet}}\" }",
+                                   :python "lambda: \"{{planet}}\"",
+                                   :ruby "proc { \"{{planet}}\" }",
+                                   :js
+                                   "function() { return \"{{planet}}\" }"}}]
+         (walk/prewalk
+          replace-code-map-to-fn
+          data__62344__auto__))))))
+  (t/testing
+      "Interpolation - Alternate Delimiters / A lambda's return value should parse with the default delimiters."
+    (t/is
+     (=
+      "Hello, (|planet| => world)!"
+      (sut/render
+       "{{= | | =}}\nHello, (|&lambda|)!"
+       (let [data__62344__auto__ {:planet "world",
+                                  :lambda
+                                  {:php
+                                   "return \"|planet| => {{planet}}\";",
+                                   :clojure
+                                   "(fn [] \"|planet| => {{planet}}\")",
+                                   :__tag__ "code",
+                                   :perl
+                                   "sub { \"|planet| => {{planet}}\" }",
+                                   :python
+                                   "lambda: \"|planet| => {{planet}}\"",
+                                   :ruby
+                                   "proc { \"|planet| => {{planet}}\" }",
+                                   :js
+                                   "function() { return \"|planet| => {{planet}}\" }"}}]
+         (walk/prewalk
+          replace-code-map-to-fn
+          data__62344__auto__))))))
+  (t/testing
+      "Interpolation - Multiple Calls / Interpolated lambdas should not be cached."
+    (t/is
+     (=
+      "1 == 2 == 3"
+      (sut/render
+       "{{lambda}} == {{{lambda}}} == {{lambda}}"
+       (let [data__62344__auto__ {:lambda
+                                  {:php
+                                   "global $calls; return ++$calls;",
+                                   :clojure
+                                   "(let [g (atom 0)] (fn [] (swap! g inc)))",
+                                   :__tag__ "code",
+                                   :perl
+                                   "sub { no strict; $calls += 1 }",
+                                   :python
+                                   "lambda: globals().update(calls=globals().get(\"calls\",0)+1) or calls",
+                                   :ruby
+                                   "proc { $calls ||= 0; $calls += 1 }",
+                                   :js
+                                   "function() { return (g=(function(){return this})()).calls=(g.calls||0)+1 }"}}]
+         (walk/prewalk
+          replace-code-map-to-fn
+          data__62344__auto__))))))
+  (t/testing
+      "Escaping / Lambda results should be appropriately escaped."
+    (t/is
+     (=
+      "<&gt;>"
+      (sut/render
+       "<{{lambda}}{{{lambda}}}"
+       (let [data__62344__auto__ {:lambda
+                                  {:php "return \">\";",
+                                   :clojure "(fn [] \">\")",
+                                   :__tag__ "code",
+                                   :perl "sub { \">\" }",
+                                   :python "lambda: \">\"",
+                                   :ruby "proc { \">\" }",
+                                   :js
+                                   "function() { return \">\" }"}}]
+         (walk/prewalk
+          replace-code-map-to-fn
+          data__62344__auto__))))))
+  (t/testing
+      "Section / Lambdas used for sections should receive the raw section string."
+    (t/is
+     (=
+      "<yes>"
+      (sut/render
+       "<{{#lambda}}{{x}}{{/lambda}}>"
+       (let [data__62344__auto__ {:x "Error!",
+                                  :lambda
+                                  {:php
+                                   "return ($text == \"{{x}}\") ? \"yes\" : \"no\";",
+                                   :clojure
+                                   "(fn [text] (if (= text \"{{x}}\") \"yes\" \"no\"))",
+                                   :__tag__ "code",
+                                   :perl
+                                   "sub { $_[0] eq \"{{x}}\" ? \"yes\" : \"no\" }",
+                                   :python
+                                   "lambda text: text == \"{{x}}\" and \"yes\" or \"no\"",
+                                   :ruby
+                                   "proc { |text| text == \"{{x}}\" ? \"yes\" : \"no\" }",
+                                   :js
+                                   "function(txt) { return (txt == \"{{x}}\" ? \"yes\" : \"no\") }"}}]
+         (walk/prewalk
+          replace-code-map-to-fn
+          data__62344__auto__))))))
+  (t/testing
+      "Section - Expansion / Lambdas used for sections should have their results parsed."
+    (t/is
+     (=
+      "<-Earth->"
+      (sut/render
+       "<{{#lambda}}-{{/lambda}}>"
+       (let [data__62344__auto__ {:planet "Earth",
+                                  :lambda
+                                  {:php
+                                   "return $text . \"{{planet}}\" . $text;",
+                                   :clojure
+                                   "(fn [text] (str text \"{{planet}}\" text))",
+                                   :__tag__ "code",
+                                   :perl
+                                   "sub { $_[0] . \"{{planet}}\" . $_[0] }",
+                                   :python
+                                   "lambda text: \"%s{{planet}}%s\" % (text, text)",
+                                   :ruby
+                                   "proc { |text| \"#{text}{{planet}}#{text}\" }",
+                                   :js
+                                   "function(txt) { return txt + \"{{planet}}\" + txt }"}}]
+         (walk/prewalk
+          replace-code-map-to-fn
+          data__62344__auto__))))))
+  (t/testing
+      "Section - Alternate Delimiters / Lambdas used for sections should parse with the current delimiters."
+    (t/is
+     (=
+      "<-{{planet}} => Earth->"
+      (sut/render
+       "{{= | | =}}<|#lambda|-|/lambda|>"
+       (let [data__62344__auto__ {:planet "Earth",
+                                  :lambda
+                                  {:php
+                                   "return $text . \"{{planet}} => |planet|\" . $text;",
+                                   :clojure
+                                   "(fn [text] (str text \"{{planet}} => |planet|\" text))",
+                                   :__tag__ "code",
+                                   :perl
+                                   "sub { $_[0] . \"{{planet}} => |planet|\" . $_[0] }",
+                                   :python
+                                   "lambda text: \"%s{{planet}} => |planet|%s\" % (text, text)",
+                                   :ruby
+                                   "proc { |text| \"#{text}{{planet}} => |planet|#{text}\" }",
+                                   :js
+                                   "function(txt) { return txt + \"{{planet}} => |planet|\" + txt }"}}]
+         (walk/prewalk
+          replace-code-map-to-fn
+          data__62344__auto__))))))
+  (t/testing
+      "Section - Multiple Calls / Lambdas used for sections should not be cached."
+    (t/is
+     (=
+      "__FILE__ != __LINE__"
+      (sut/render
+       "{{#lambda}}FILE{{/lambda}} != {{#lambda}}LINE{{/lambda}}"
+       (let [data__62344__auto__ {:lambda
+                                  {:php
+                                   "return \"__\" . $text . \"__\";",
+                                   :clojure
+                                   "(fn [text] (str \"__\" text \"__\"))",
+                                   :__tag__ "code",
+                                   :perl
+                                   "sub { \"__\" . $_[0] . \"__\" }",
+                                   :python
+                                   "lambda text: \"__%s__\" % (text)",
+                                   :ruby
+                                   "proc { |text| \"__#{text}__\" }",
+                                   :js
+                                   "function(txt) { return \"__\" + txt + \"__\" }"}}]
+         (walk/prewalk
+          replace-code-map-to-fn
+          data__62344__auto__))))))
+  (t/testing
+      "Inverted Section / Lambdas used for inverted sections should be considered truthy."
+    (t/is
+     (=
+      "<>"
+      (sut/render
+       "<{{^lambda}}{{static}}{{/lambda}}>"
+       (let [data__62344__auto__ {:static "static",
+                                  :lambda
+                                  {:php "return false;",
+                                   :clojure "(fn [text] false)",
+                                   :__tag__ "code",
+                                   :perl "sub { 0 }",
+                                   :python "lambda text: 0",
+                                   :ruby "proc { |text| false }",
+                                   :js
+                                   "function(txt) { return false }"}}]
+         (walk/prewalk
+          replace-code-map-to-fn
+          data__62344__auto__)))))))

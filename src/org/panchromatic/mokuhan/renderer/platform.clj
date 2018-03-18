@@ -3,9 +3,18 @@
             [clojure.set :as set]))
 
 (extend-type clojure.lang.AFunction
+  proto/Rendable
+  (render [f context state]
+    (let [render (:render state)]
+      (-> (f) (proto/render context state) render)))
+
   proto/StandardSectionRenderer
   (render-section [f section context state]
-    (f (proto/render-section-simply section context state))))
+    (let [render (:render state)]
+      (-> (proto/render-section-simply section context state)
+          f
+          (proto/render context state)
+          render))))
 
 (extend-type java.util.List
   proto/StandardSectionRenderer

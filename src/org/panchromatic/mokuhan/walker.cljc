@@ -30,7 +30,6 @@
 
 (defn traverse* [x paths]
   (loop [[path & candidates] (path-candidates paths)]
-    (prn path)
     (when path
       (if-let [x (reduce #(cond-> %1
                             (not= (first %2) ".")
