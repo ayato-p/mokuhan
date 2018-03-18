@@ -31,10 +31,11 @@
            `(t/testing ~(str (:name test) " / " (:desc test))
               (t/is (= ~(:expected test)
                        ~(if-not (has-lambda? test)
-                          `(sut/render ~(:template test) ~(:data test))
+                          `(sut/render ~(:template test) ~(:data test) ~(select-keys test [:partials]))
                           `(sut/render ~(:template test)
                                        (let [data# ~(:data test)]
-                                         (walk/prewalk replace-code-map-to-fn data#)))))))))))
+                                         (walk/prewalk replace-code-map-to-fn data#))
+                                       ~(select-keys test [:partials]))))))))))
 
 ;; (generate-test-cases-from-spec comments)
 
@@ -120,20 +121,19 @@
 ;; (generate-test-cases-from-spec delimiters)
 
 (t/deftest delimiters-test
-
   (t/testing
       "Pair Behavior / The equals sign (used on both sides) should permit delimiter changes."
     (t/is
      (=
       "(Hey!)"
-      (sut/render "{{=<% %>=}}(<%text%>)" {:text "Hey!"}))))
+      (sut/render "{{=<% %>=}}(<%text%>)" {:text "Hey!"} {}))))
 
   (t/testing
       "Special Characters / Characters with special meaning regexen should be valid delimiters."
     (t/is
      (=
       "(It worked!)"
-      (sut/render "({{=[ ]=}}[text])" {:text "It worked!"}))))
+      (sut/render "({{=[ ]=}}[text])" {:text "It worked!"} {}))))
 
   (t/testing
       "Sections / Delimiters set outside sections should persist."
@@ -142,7 +142,8 @@
       "[\n  I got interpolated.\n  |data|\n\n  {{data}}\n  I got interpolated.\n]\n"
       (sut/render
        "[\n{{#section}}\n  {{data}}\n  |data|\n{{/section}}\n\n{{= | | =}}\n|#section|\n  {{data}}\n  |data|\n|/section|\n]\n"
-       {:section true, :data "I got interpolated."}))))
+       {:section true, :data "I got interpolated."}
+       {}))))
 
   (t/testing
       "Inverted Sections / Delimiters set outside inverted sections should persist."
@@ -151,7 +152,8 @@
       "[\n  I got interpolated.\n  |data|\n\n  {{data}}\n  I got interpolated.\n]\n"
       (sut/render
        "[\n{{^section}}\n  {{data}}\n  |data|\n{{/section}}\n\n{{= | | =}}\n|^section|\n  {{data}}\n  |data|\n|/section|\n]\n"
-       {:section false, :data "I got interpolated."}))))
+       {:section false, :data "I got interpolated."}
+       {}))))
 
   (t/testing
       "Partial Inheritence / Delimiters set in a parent template should not affect a partial."
@@ -160,7 +162,8 @@
       "[ .yes. ]\n[ .yes. ]\n"
       (sut/render
        "[ {{>include}} ]\n{{= | | =}}\n[ |>include| ]\n"
-       {:value "yes"}))))
+       {:value "yes"}
+       {:partials {:include ".{{value}}."}}))))
 
   (t/testing
       "Post-Partial Behavior / Delimiters set in a partial should not affect the parent template."
@@ -169,45 +172,47 @@
       "[ .yes.  .yes. ]\n[ .yes.  .|value|. ]\n"
       (sut/render
        "[ {{>include}} ]\n[ .{{value}}.  .|value|. ]\n"
-       {:value "yes"}))))
+       {:value "yes"}
+       {:partials
+        {:include ".{{value}}. {{= | | =}} .|value|."}}))))
 
   (t/testing
       "Surrounding Whitespace / Surrounding whitespace should be left untouched."
-    (t/is (= "|  |" (sut/render "| {{=@ @=}} |" {}))))
+    (t/is (= "|  |" (sut/render "| {{=@ @=}} |" {} {}))))
 
   (t/testing
       "Outlying Whitespace (Inline) / Whitespace should be left untouched."
-    (t/is (= " | \n" (sut/render " | {{=@ @=}}\n" {}))))
+    (t/is (= " | \n" (sut/render " | {{=@ @=}}\n" {} {}))))
 
   (t/testing
       "Standalone Tag / Standalone lines should be removed from the template."
     (t/is
      (=
       "Begin.\nEnd.\n"
-      (sut/render "Begin.\n{{=@ @=}}\nEnd.\n" {}))))
+      (sut/render "Begin.\n{{=@ @=}}\nEnd.\n" {} {}))))
 
   (t/testing
       "Indented Standalone Tag / Indented standalone lines should be removed from the template."
     (t/is
      (=
       "Begin.\nEnd.\n"
-      (sut/render "Begin.\n  {{=@ @=}}\nEnd.\n" {}))))
+      (sut/render "Begin.\n  {{=@ @=}}\nEnd.\n" {} {}))))
 
   (t/testing
       "Standalone Line Endings / \"\\r\\n\" should be considered a newline for standalone tags."
-    (t/is (= "|\r\n|" (sut/render "|\r\n{{= @ @ =}}\r\n|" {}))))
+    (t/is (= "|\r\n|" (sut/render "|\r\n{{= @ @ =}}\r\n|" {} {}))))
 
   (t/testing
       "Standalone Without Previous Line / Standalone tags should not require a newline to precede them."
-    (t/is (= "=" (sut/render "  {{=@ @=}}\n=" {}))))
+    (t/is (= "=" (sut/render "  {{=@ @=}}\n=" {} {}))))
 
   (t/testing
       "Standalone Without Newline / Standalone tags should not require a newline to follow them."
-    (t/is (= "=\n" (sut/render "=\n  {{=@ @=}}" {}))))
+    (t/is (= "=\n" (sut/render "=\n  {{=@ @=}}" {} {}))))
 
   (t/testing
       "Pair with Padding / Superfluous in-tag whitespace should be ignored."
-    (t/is (= "||" (sut/render "|{{= @   @ =}}|" {})))))
+    (t/is (= "||" (sut/render "|{{= @   @ =}}|" {} {})))))
 
 ;; (generate-test-cases-from-spec interpolation)
 
@@ -602,69 +607,105 @@
        "|{{^ boolean }}={{/ boolean }}|"
        {:boolean false})))))
 
+;; (generate-test-cases-from-spec partials)
 
-(comment
-  ;; (generate-test-cases-from-spec partials)
+(t/deftest partials-test
+  (t/testing
+      "Basic Behavior / The greater-than operator should expand to the named partial."
+    (t/is
+     (=
+      "\"from partial\""
+      (sut/render
+       "\"{{>text}}\""
+       {}
+       {:partials {:text "from partial"}}))))
+  (t/testing
+      "Failed Lookup / The empty string should be used when the named partial is not found."
+    (t/is (= "\"\"" (sut/render "\"{{>text}}\"" {} {:partials {}}))))
+  (t/testing
+      "Context / The greater-than operator should operate within the current context."
+    (t/is
+     (=
+      "\"*content*\""
+      (sut/render
+       "\"{{>partial}}\""
+       {:text "content"}
+       {:partials {:partial "*{{text}}*"}}))))
+  (t/testing
+      "Recursion / The greater-than operator should properly recurse."
+    (t/is
+     (=
+      "X<Y<>>"
+      (sut/render
+       "{{>node}}"
+       {:content "X", :nodes [{:content "Y", :nodes []}]}
+       {:partials
+        {:node "{{content}}<{{#nodes}}{{>node}}{{/nodes}}>"}}))))
+  (t/testing
+      "Surrounding Whitespace / The greater-than operator should not alter surrounding whitespace."
+    (t/is
+     (=
+      "| \t|\t |"
+      (sut/render
+       "| {{>partial}} |"
+       {}
+       {:partials {:partial "\t|\t"}}))))
+  (t/testing
+      "Inline Indentation / Whitespace should be left untouched."
+    (t/is
+     (=
+      "  |  >\n>\n"
+      (sut/render
+       "  {{data}}  {{> partial}}\n"
+       {:data "|"}
+       {:partials {:partial ">\n>"}}))))
+  (t/testing
+      "Standalone Line Endings / \"\\r\\n\" should be considered a newline for standalone tags."
+    (t/is
+     (=
+      "|\r\n>|"
+      (sut/render
+       "|\r\n{{>partial}}\r\n|"
+       {}
+       {:partials {:partial ">"}}))))
+  (t/testing
+      "Standalone Without Previous Line / Standalone tags should not require a newline to precede them."
+    (t/is
+     (=
+      "  >\n  >>"
+      (sut/render
+       "  {{>partial}}\n>"
+       {}
+       {:partials {:partial ">\n>"}}))))
+  (t/testing
+      "Standalone Without Newline / Standalone tags should not require a newline to follow them."
+    (t/is
+     (=
+      ">\n  >\n  >"
+      (sut/render
+       ">\n  {{>partial}}"
+       {}
+       {:partials {:partial ">\n>"}}))))
+  (t/testing
+      "Standalone Indentation / Each line of the partial should be indented before rendering."
+    (t/is
+     (=
+      "\\\n |\n <\n->\n |\n/\n"
+      "\\\n |\n <\n->\n |\n/\n"
+      (sut/render
+       "\\\n {{>partial}}\n/\n"
+       {:content "<\n->"}
+       {:partials {:partial "|\n{{{content}}}\n|\n"}}))))
+  (t/testing
+      "Padding Whitespace / Superfluous in-tag whitespace should be ignored."
+    (t/is
+     (=
+      "|[]|"
+      (sut/render
+       "|{{> partial }}|"
+       {:boolean true}
+       {:partials {:partial "[]"}})))))
 
-  (t/deftest partials-test
-
-    (t/testing
-        "Basic Behavior / The greater-than operator should expand to the named partial."
-      (t/is (= "\"from partial\"" (sut/render "\"{{>text}}\"" {}))))
-
-    (t/testing
-        "Failed Lookup / The empty string should be used when the named partial is not found."
-      (t/is (= "\"\"" (sut/render "\"{{>text}}\"" {}))))
-
-    (t/testing
-        "Context / The greater-than operator should operate within the current context."
-      (t/is
-       (=
-        "\"*content*\""
-        (sut/render "\"{{>partial}}\"" {:text "content"}))))
-
-    (t/testing
-        "Recursion / The greater-than operator should properly recurse."
-      (t/is
-       (=
-        "X<Y<>>"
-        (sut/render
-         "{{>node}}"
-         {:content "X", :nodes [{:content "Y", :nodes []}]}))))
-
-    (t/testing
-        "Surrounding Whitespace / The greater-than operator should not alter surrounding whitespace."
-      (t/is (= "| \t|\t |" (sut/render "| {{>partial}} |" {}))))
-
-    (t/testing
-        "Inline Indentation / Whitespace should be left untouched."
-      (t/is
-       (=
-        "  |  >\n>\n"
-        (sut/render "  {{data}}  {{> partial}}\n" {:data "|"}))))
-
-    (t/testing
-        "Standalone Line Endings / \"\\r\\n\" should be considered a newline for standalone tags."
-      (t/is (= "|\r\n>|" (sut/render "|\r\n{{>partial}}\r\n|" {}))))
-
-    (t/testing
-        "Standalone Without Previous Line / Standalone tags should not require a newline to precede them."
-      (t/is (= "  >\n  >>" (sut/render "  {{>partial}}\n>" {}))))
-
-    (t/testing
-        "Standalone Without Newline / Standalone tags should not require a newline to follow them."
-      (t/is (= ">\n  >\n  >" (sut/render ">\n  {{>partial}}" {}))))
-
-    (t/testing
-        "Standalone Indentation / Each line of the partial should be indented before rendering."
-      (t/is
-       (=
-        "\\\n |\n <\n->\n |\n/\n"
-        (sut/render "\\\n {{>partial}}\n/\n" {:content "<\n->"}))))
-
-    (t/testing
-        "Padding Whitespace / Superfluous in-tag whitespace should be ignored."
-      (t/is (= "|[]|" (sut/render "|{{> partial }}|" {:boolean true}))))))
 
 ;; (generate-test-cases-from-spec sections)
 

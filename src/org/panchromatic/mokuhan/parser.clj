@@ -1,9 +1,10 @@
 (ns org.panchromatic.mokuhan.parser
-  (:require [fast-zip.core :as zip]
+  (:require [clojure.string :as str]
+            [fast-zip.core :as zip]
             [instaparse.core :as insta]
-            [org.panchromatic.mokuhan.util.misc :as misc]
             [org.panchromatic.mokuhan.ast :as ast]
-            [clojure.string :as str])
+            [org.panchromatic.mokuhan.util.misc :as misc]
+            [org.panchromatic.mokuhan.walker :as walker])
   (:import java.util.regex.Pattern))
 
 (defn- re-quote [s]
@@ -80,11 +81,7 @@ rest = #'(.|\\r?\\n)*$'")))
         "" (ast/new-escaped-variable path)
         "&" (ast/new-unescaped-variable path)
         "#" (ast/new-standard-section path)
-        ;; "/"
-        "^" (ast/new-inverted-section path)
-        ;; todo
-        ">" nil
-        ))))
+        "^" (ast/new-inverted-section path)))))
 
 (defn- remove-left-whitespaces [loc]
   (let [cnt (count (zip/lefts loc))]
@@ -97,6 +94,13 @@ rest = #'(.|\\r?\\n)*$'")))
                     (zero? n) zip/down)))
               (zip/left loc)
               (range (dec cnt) -1 -1)))))
+
+(defn- copy-left-whitespaces [loc]
+  (loop [loc (zip/left loc)
+         whitespaces []]
+    (if (ast/whitespace? (zip/node loc))
+      (recur (zip/left loc) (conj whitespaces (zip/node loc)))
+      whitespaces)))
 
 (defn parse
   ([mustache]
@@ -146,6 +150,28 @@ rest = #'(.|\\r?\\n)*$'")))
                                {:type ::unopend-section
                                 :tag path
                                 :meta (misc/meta-without-qualifiers elm)})))
+
+             ">" ;; partial
+             (let [standalone? (and (:standalone? state) (= :end-of-line (ffirst parsed)))
+                   whitespaces (when standalone?
+                                 (-> loc
+                                     (zip/append-child nil)
+                                     zip/down
+                                     zip/rightmost
+                                     copy-left-whitespaces))
+                   children (-> (:partials opts)
+                                (walker/traverse path [])
+                                (parse opts)
+                                (ast/children)
+                                (->> (drop 1)))]
+               (recur (reduce #(-> %1
+                                   (cond-> (ast/beginning-of-line? %2)
+                                     (as-> loc' (reduce (fn [l ws] (zip/append-child l ws)) loc' whitespaces)))
+                                   (zip/append-child %2))
+                              loc
+                              children)
+                      (cond->> parsed standalone? (drop 2))
+                      state))
 
              (recur (-> loc (zip/append-child (vec->ast-node elm)))
                     parsed

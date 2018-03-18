@@ -7,5 +7,5 @@
    (render mustache data {}))
 
   ([mustache data opts]
-   (-> (parser/parse mustache)
-       (renderer/render data {:render #(render % data opts)}))))
+   (-> (parser/parse mustache opts)
+       (renderer/render data (assoc opts :render #(render % data opts))))))
