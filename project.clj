@@ -3,8 +3,9 @@
   :url "https://github.com/ayato-p/mokuhan"
   :license {:name "MIT License"
             :url "https://choosealicense.com/licenses/mit"}
-  :dependencies [[instaparse "1.4.8"]
-                 [fast-zip "0.7.0"]]
+  :dependencies [[fast-zip "0.7.0"]
+                 [instaparse "1.4.8"]
+                 [org.clojure/math.combinatorics "0.1.4"]]
 
   :profiles
   {:provided

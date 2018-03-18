@@ -1,29 +1,46 @@
 (ns org.panchromatic.mokuhan.walker
-  (:require [org.panchromatic.mokuhan.walker.platform :as platform]
+  (:require [clojure.math.combinatorics :as comb]
+            [org.panchromatic.mokuhan.walker.platform :as platform]
             [org.panchromatic.mokuhan.walker.protocol :as proto]))
 
 ;; don't remove platform ns via ns clean-up
 ::platform/require
 
 (defn- path-candidates [path]
-  (let [v (peek path)
-        path (pop path)]
-    (-> (->> (map #(subvec path % (count path)) (range (count path)))
-             (mapcat #(let [length (count %)]
-                        (->> (for [sep (reverse (range length))]
-                               (for [p (if (zero? sep) (take 1 %) (subvec % sep length))]
-                                 (conj (subvec % 0 sep) p)))
-                             (apply concat))))
-             (map #(conj % v)))
-        (concat `([~v])))))
+  (if (>= 1 (count path))
+    (list path)
+    (let [v (peek path)
+          path (map-indexed #(vector (inc %1) %2) (pop path))]
+      (concat
+       (map
+        #(conj (nth % 1) v)
+        (sort-by
+         #(+ (nth % 0) (count (nth % 1)))
+         >
+         (reduce (fn [v i]
+                   (->> (comb/combinations path i)
+                        (map #(reduce (fn [w [j x]]
+                                        (-> w (update 0 * j) (update 1 conj x)))
+                                      [1 []]
+                                      (sort-by first < %)))
+                        (concat v)))
+                 ()
+                 (range 1 (inc (count path))))))
+       (list [v])))))
+
+(defn traverse* [x paths]
+  (loop [[path & candidates] (path-candidates paths)]
+    (prn path)
+    (when path
+      (if-let [x (reduce #(cond-> %1
+                            (not= (first %2) ".")
+                            (proto/traverse %2))
+                         x
+                         path)]
+        (cond-> x (proto/found-key? x) (.value))
+        (recur candidates)))))
 
 (defn traverse
-  ([x path]
-   (loop [[path & candidates] (path-candidates (vec path))]
-     (when path
-       (if-let [x (proto/traverse x path)]
-         (cond-> x (proto/found-key? x) (.value))
-         (recur candidates)))))
-
   ([x path position]
-   (traverse x (into (vec position) path))))
+   (->> (conj (vec position) path)
+        (traverse* x))))

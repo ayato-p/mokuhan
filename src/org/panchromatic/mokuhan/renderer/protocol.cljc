@@ -20,7 +20,7 @@
         contents (.contents section)]
     (->> contents
          (reduce (fn [sb ast]
-                   (->> (update state :position into path)
+                   (->> (update state :position conj path)
                         (render ast context)
                         (sb/append sb)))
                  (sb/new-string-builder))

@@ -15,8 +15,7 @@
       (->> (for [idx (range (count l)) ast contents] [idx ast])
            (reduce (fn [sb [idx ast]]
                      (->> (-> state
-                              (update :position into path)
-                              (update :position conj idx))
+                              (update :position conj path [idx]))
                           (proto/render ast context)
                           (.append sb)))
                    (StringBuilder. 1024))

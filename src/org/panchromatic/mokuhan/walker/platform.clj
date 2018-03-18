@@ -31,7 +31,8 @@
   java.util.Map
   (traverse
     ([^java.util.Map m path]
-     (let [[p & path] path]
+     (let [[p & path] path
+           p (cond-> p (not (string? p)) str)]
        (-> (if (= p ".")
              m
              (reduce (fn [_ k]
