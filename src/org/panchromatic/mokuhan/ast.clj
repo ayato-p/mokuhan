@@ -1,5 +1,7 @@
 (ns org.panchromatic.mokuhan.ast
-  (:require [fast-zip.core :as zip]))
+  (:require [fast-zip.core :as zip]
+            [clojure.string :as str]
+            [org.panchromatic.mokuhan.util.stringbuilder :as sb]))
 
 (defprotocol ASTZipper
   (branch? [this])
@@ -12,57 +14,97 @@
   (children [this] nil)
   (make-node [this children] nil))
 
+(defn to-visible [x]
+  (assoc x :visible true))
+
+(defn to-invisible [x]
+  (assoc x :visible false))
+
+(defn visible? [x]
+  (:visible x true))
+
+(defn- str-path [path]
+  (str/join "." path))
+
+(defn- wrap-delimiters [s {:keys [open close]}]
+  (str open s close))
+
 ;;; variable
 (defprotocol Variable)
 
 (defn variable? [x]
   (satisfies? Variable x))
 
-(defrecord EscapedVariable [path]
-  Variable)
+(defrecord EscapedVariable [path delimiters]
+  Variable
 
-(defn new-escaped-variable [path]
-  (EscapedVariable. (vec path)))
+  Object
+  (toString [_]
+    (wrap-delimiters (str-path path) delimiters)))
 
-(defrecord UnescapedVariable [path]
-  Variable)
+(defn new-escaped-variable [path delimiters]
+  (EscapedVariable. (vec path) delimiters))
 
-(defn new-unescaped-variable [path]
-  (UnescapedVariable. (vec path)))
+(defrecord UnescapedVariable [path delimiters]
+  Variable
+
+  Object
+  (toString [_]
+    (wrap-delimiters (str-path path) delimiters)))
+
+(defn new-unescaped-variable [path delimiters]
+  (UnescapedVariable. (vec path) delimiters))
 
 ;;; section
+(defn set-close-tag-delimiters [x delimiters]
+  (assoc x :close-tag-delimiters delimiters))
+
 (defprotocol Section)
 
 (defn section? [x]
   (satisfies? Section x))
 
-(defrecord StandardSection [path contents]
+(defrecord StandardSection [path contents open-tag-delimiters close-tag-delimiters]
   Section
+
   ASTZipper
   (branch? [this] true)
   (children [this] contents)
   (make-node [this children]
-    (StandardSection. path children)))
+    (StandardSection. path children open-tag-delimiters close-tag-delimiters))
 
-(defn new-standard-section
-  ([path]
-   (new-standard-section path []))
-  ([path contents]
-   (StandardSection. (vec path) contents)))
+  Object
+  (toString [_]
+    (let [path (str-path path)]
+      (-> (sb/new-string-builder)
+          (sb/append (wrap-delimiters (str "#" path) open-tag-delimiters))
+          (as-> sb (reduce #(sb/append %1 (.toString %2)) sb contents))
+          (sb/append (wrap-delimiters (str "/" path) close-tag-delimiters))
+          (sb/to-string)))))
 
-(defrecord InvertedSection [path contents]
+(defn new-standard-section [path delimiters]
+  (new-standard-section path () delimiters delimiters))
+
+(defrecord InvertedSection [path contents open-tag-delimiters close-tag-delimiters]
   Section
+
   ASTZipper
   (branch? [this] true)
   (children [this] contents)
   (make-node [this children]
-    (InvertedSection. path children)))
+    (InvertedSection. path children open-tag-delimiters close-tag-delimiters))
 
-(defn new-inverted-section
-  ([path]
-   (new-inverted-section path []))
-  ([path contents]
-   (InvertedSection. (vec path) contents)))
+  Object
+  (toString [_]
+    (let [path (str-path path)]
+      (-> (sb/new-string-builder)
+          (sb/append (wrap-delimiters (str "#" path) open-tag-delimiters))
+          (as-> sb (reduce #(sb/append %1 (.toString %2)) sb contents))
+          (sb/append (wrap-delimiters (str "/" path) close-tag-delimiters))
+          (sb/to-string)))))
+
+(defn new-inverted-section [path delimiters]
+  (new-inverted-section path () delimiters delimiters))
 
 ;; other
 
@@ -81,14 +123,16 @@
 
 (defrecord Text [content]
   Object
-  (toString [this] (.toString content)))
+  (toString [this]
+    (if (visible? this) content "")))
 
 (defn new-text [content]
   (Text. content))
 
 (defrecord Whitespace [content]
   Object
-  (toString [this] (.toString content)))
+  (toString [this]
+    (if (visible? this) content "")))
 
 (defn new-whitespace [content]
   (Whitespace. content))
@@ -111,7 +155,14 @@
   (branch? [this] true)
   (children [this] contents)
   (make-node [this children]
-    (Mustache. children)))
+    (Mustache. children))
+
+  Object
+  (toString [_]
+    (sb/to-string
+     (reduce #(sb/append %1 (.toString %2))
+             (sb/new-string-builder)
+             contents))))
 
 (defn new-mustache
   ([]

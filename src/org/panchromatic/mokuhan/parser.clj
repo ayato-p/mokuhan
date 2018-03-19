@@ -29,8 +29,7 @@
 (def ^:private sigils ["\\&" "\\#" "\\/" "\\^" "\\>"])
 
 (defn generate-mustache-spec [{:keys [open close] :as delimiters}]
-  (let [mustache? (= default-delimiters delimiters)]
-    (str "
+  (str "
 <mustache> = *(beginning-of-line *(text / whitespace / tag) end-of-line)
 beginning-of-line = <#'(?:^|\\A)'>
 end-of-line = #'(?:\\r?\\n|\\z)'
@@ -40,18 +39,20 @@ whitespace = #'[^\\S\\r\\n]+'
 <ident> = #'(?!(?:\\!|\\=))[^\\s\\.]+?(?=\\s|\\.|" (re-quote close) ")'
 path = (ident *(<'.'> ident) / #'\\.')
 
-<tag> = (comment-tag / set-delimiter-tag / standard-tag " (when mustache? " / triple-mustache-tag") ")
-standard-tag = <#'" (re-quote open) "'> sigil <*1 #'\\s+'> path <*1 #'\\s+'> <#'" (re-quote close) "'>
+<tag> = ( comment-tag / set-delimiter-tag / standard-tag / alt-unescaped-tag )
+tag-open = #'" (re-quote open) "'
+tag-close = #'" (re-quote close) "'
+standard-tag = tag-open sigil <*1 #'\\s+'> path <*1 #'\\s+'> tag-close
 sigil = #'(?:" (str/join "|" sigils) ")?'
-" (when mustache?
-    "triple-mustache-tag = <#'\\Q{{{\\E'> <*1 #'\\s+'> path <*1 #'\\s+'> <#'\\Q}}}\\E'>") "
+alt-unescaped-tag = tag-open #'\\{' <*1 #'\\s+'> path <*1 #'\\s+'> #'\\}' tag-close
 
-comment-tag = <#'^" (re-quote (str open "!")) "'> #'(?:.|\\r?\\n)*?(?=" (re-quote close) ")' <#'" (re-quote close) "'>
+comment-tag = tag-open <#'!'> comment-content tag-close
+comment-content = #'(?:.|\\r?\\n)*?(?=" (re-quote close) ")'
 
-set-delimiter-tag = <#'^" (re-quote (str open "=")) "'> <*1 #'\\s+'> new-open-delimiter <*1 #'\\s+'> new-close-delimiter <*1 #'\\s+'> <#'" (re-quote (str "=" close)) "'> rest
+set-delimiter-tag = tag-open <#'='> <*1 #'\\s+'> new-open-delimiter <*1 #'\\s+'> new-close-delimiter <*1 #'\\s+'> <#'='> tag-close rest
 new-open-delimiter = #'[^\\s]+'
 new-close-delimiter = #'[^\\s]+?(?=\\s*" (re-quote (str "=" close)) ")'
-rest = #'(.|\\r?\\n)*$'")))
+rest = #'(.|\\r?\\n)*$'"))
 
 (defn gen-parser [delimiters]
   (insta/parser (generate-mustache-spec delimiters) :input-format :abnf))
@@ -68,32 +69,40 @@ rest = #'(.|\\r?\\n)*$'")))
           (reduce-kv #(conj %1 %2 %3) [])
           (apply insta/parse parser mustache)))))
 
-(defn- vec->ast-node [v]
-  (case (first v)
-    :beginning-of-line (ast/new-beginning-of-line)
-    (:text :end-of-line) (ast/new-text (second v))
-    :whitespace (ast/new-whitespace (second v))
-    :triple-mustache-tag (ast/new-unescaped-variable (drop 1 (second v)))
-    :comment-tag (ast/new-comment (second v))
-    :standard-tag
-    (let [[_ [_ sigil] [_ & path]] v]
-      (case sigil
-        "" (ast/new-escaped-variable path)
-        "&" (ast/new-unescaped-variable path)
-        "#" (ast/new-standard-section path)
-        "^" (ast/new-inverted-section path)))))
+(defn- vec->ast-node [[tag-name & m]]
+  (let [m (into {} m)]
+    (case tag-name
+      :beginning-of-line (ast/new-beginning-of-line)
+      (:text :end-of-line) (ast/new-text (second v))
+      :whitespace (ast/new-whitespace (second v))
+      :alt-unescaped-tag (ast/new-unescaped-variable (drop 1 (second v)))
+      :comment-tag (ast/new-comment (second v))
+      :standard-tag
+      (let [[_ open [_ sigil] [_ & path] close] v]
+        (case sigil
+          "" (ast/new-escaped-variable path)
+          "&" (ast/new-unescaped-variable path)
+          "#" (ast/new-standard-section path)
+          "^" (ast/new-inverted-section path))))))
 
-(defn- remove-left-whitespaces [loc]
-  (let [cnt (count (zip/lefts loc))]
-    (if (zero? cnt)
-      loc
-      (reduce (fn [loc n]
-                (if-not (ast/whitespace? (zip/node loc))
-                  (reduced (zip/rightmost loc))
-                  (cond-> (zip/remove loc)
-                    (zero? n) zip/down)))
-              (zip/left loc)
-              (range (dec cnt) -1 -1)))))
+(defn- tag-vec->ast-node [v]
+  (let [tag-name (first v)
+        {:keys [path] :as attrs} (into {} (rest v))
+        delimiters (set-)]
+    (case tag-name
+      :standard-tag
+      (case (:sigil attrs)
+        "" (ast/new-escaped-variable path )))))
+
+(defn- invisible-rightside-children-whitespaces [loc]
+  (if (zip/down loc)
+    (loop [loc (some-> loc zip/down zip/rightmost)]
+      (if (and loc (ast/whitespace? (zip/node loc)))
+        (-> (zip/edit loc ast/to-invisible)
+            zip/left
+            recur)
+        (zip/up loc)))
+    loc))
 
 (defn- copy-left-whitespaces [loc]
   (loop [loc (zip/left loc)
@@ -121,12 +130,15 @@ rest = #'(.|\\r?\\n)*$'")))
 
        (case (first elm)
          :standard-tag
-         (let [[_ [_ sigil] [_ & path]] elm]
-           (case sigil
+         (let [tag-name (first elm)
+               tag (into {} (rest elm))]
+           (case (:sigil tag)
              ("#" "^") ;; open section
-             (let [standalone? (and (:standalone? state) (= :end-of-line (ffirst parsed)))
-                   loc (-> loc (zip/append-child (vec->ast-node elm)) zip/down zip/rightmost)]
-               (recur (cond-> loc standalone? remove-left-whitespaces)
+             (let [standalone? (and (:standalone? state) (= :end-of-line (ffirst parsed)))]
+               (recur (-> (cond-> loc standalone? invisible-rightside-children-whitespaces)
+                          (zip/append-child (vec->ast-node ))
+                          zip/down
+                          zip/rightmost)
                       (cond->> parsed standalone? (drop 2)) ;; `drop 2` means remove EOL&BOL
                       (-> state
                           (update :stack conj path)
@@ -134,14 +146,8 @@ rest = #'(.|\\r?\\n)*$'")))
 
              "/" ;; close secion
              (if (= (peek (:stack state)) path)
-               (let [standalone? (and (:standalone? state) (= :end-of-line (ffirst parsed)))
-                     loc (-> loc
-                             (zip/append-child nil) ;; just for anchor
-                             zip/down
-                             zip/rightmost
-                             (cond-> standalone? remove-left-whitespaces))
-                     leftmost? (zero? (count (zip/lefts loc)))]
-                 (recur (-> loc zip/remove (cond-> (not leftmost?) zip/up) zip/up)
+               (let [standalone? (and (:standalone? state) (= :end-of-line (ffirst parsed)))]
+                 (recur (-> (cond-> loc standalone? invisible-rightside-children-whitespaces) zip/up)
                         (cond->> parsed standalone? (drop 2))
                         (-> state
                             (update :stack pop)
@@ -184,25 +190,15 @@ rest = #'(.|\\r?\\n)*$'")))
                            (drop 1) ;; don't need BOL
                            )
                standalone? (and (:standalone? state)
-                                (or (= :end-of-line (ffirst parsed)) (empty? parsed)))
-               loc (-> loc
-                       (zip/append-child nil) ;; anchor
-                       zip/down
-                       zip/rightmost
-                       (cond-> standalone? remove-left-whitespaces))
-               leftmost? (zero? (count (zip/lefts loc)))]
-           (recur (-> loc zip/remove (cond-> (not leftmost?) zip/up))
+                                (or (= :end-of-line (ffirst parsed)) (empty? parsed)))]
+           (recur (cond-> loc standalone? invisible-rightside-children-whitespaces)
                   (cond->> parsed standalone? (drop 2))
                   (assoc state :standalone? standalone?)))
 
          :comment-tag
          (let [standalone? (and (:standalone? state) (= :end-of-line (ffirst parsed)))]
-           (recur (-> loc
-                      (zip/append-child (vec->ast-node elm))
-                      zip/down
-                      zip/rightmost
-                      (cond-> standalone? remove-left-whitespaces)
-                      zip/up)
+           (recur (-> (cond-> loc standalone? invisible-rightside-children-whitespaces)
+                      (zip/append-child (vec->ast-node elm)))
                   (cond->> parsed standalone? (drop 2))
                   (assoc state :standalone? standalone?)))
 
