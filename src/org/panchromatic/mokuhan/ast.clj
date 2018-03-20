@@ -56,6 +56,9 @@
   (UnescapedVariable. (vec path) delimiters))
 
 ;;; section
+(defn get-open-tag-delimiters [x]
+  (:open-tag-delimiters x))
+
 (defn set-close-tag-delimiters [x delimiters]
   (assoc x :close-tag-delimiters delimiters))
 
@@ -83,7 +86,7 @@
           (sb/to-string)))))
 
 (defn new-standard-section [path delimiters]
-  (new-standard-section path () delimiters delimiters))
+  (StandardSection. path () delimiters delimiters))
 
 (defrecord InvertedSection [path contents open-tag-delimiters close-tag-delimiters]
   Section
@@ -104,7 +107,7 @@
           (sb/to-string)))))
 
 (defn new-inverted-section [path delimiters]
-  (new-inverted-section path () delimiters delimiters))
+  (InvertedSection. path () delimiters delimiters))
 
 ;; other
 

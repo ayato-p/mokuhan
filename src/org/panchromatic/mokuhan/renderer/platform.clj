@@ -1,17 +1,22 @@
 (ns org.panchromatic.mokuhan.renderer.platform
-  (:require [org.panchromatic.mokuhan.renderer.protocol :as proto]
-            [clojure.set :as set]))
+  (:require [org.panchromatic.mokuhan.ast :as ast]
+            [org.panchromatic.mokuhan.renderer.protocol :as proto]
+            [org.panchromatic.mokuhan.util.stringbuilder :as sb]))
 
 (extend-type clojure.lang.AFunction
   proto/Rendable
   (render [f context state]
-    (let [render (:render state)]
+    (let [render ((:render state))]
       (-> (f) (proto/render context state) render)))
 
   proto/StandardSectionRenderer
   (render-section [f section context state]
-    (let [render (:render state)]
-      (-> (proto/render-section-simply section context state)
+    ;; Temporary fix
+    (let [delimiters (ast/get-open-tag-delimiters section)
+          render ((:render state){:delimiters delimiters})]
+      (-> (ast/children section)
+          (->> (reduce #(sb/append %1 (.toString %2)) (sb/new-string-builder)))
+          sb/to-string
           f
           (proto/render context state)
           render))))

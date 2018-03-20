@@ -55,7 +55,8 @@ new-close-delimiter = #'[^\\s]+?(?=\\s*" (re-quote (str "=" close)) ")'
 rest = #'(.|\\r?\\n)*$'"))
 
 (defn gen-parser [delimiters]
-  (insta/parser (generate-mustache-spec delimiters) :input-format :abnf))
+  (insta/parser (generate-mustache-spec delimiters)
+                :input-format :abnf))
 
 (def default-parser
   (gen-parser default-delimiters))
@@ -64,35 +65,13 @@ rest = #'(.|\\r?\\n)*$'"))
   ([mustache]
    (parse* mustache {}))
   ([mustache opts]
-   (let [parser (:parser opts default-parser)]
+   (let [delimiters (:delimiters opts default-delimiters)
+         parser (if (= default-delimiters delimiters)
+                  default-parser
+                  (gen-parser delimiters))]
      (->> (dissoc opts :parser)
           (reduce-kv #(conj %1 %2 %3) [])
           (apply insta/parse parser mustache)))))
-
-(defn- vec->ast-node [[tag-name & m]]
-  (let [m (into {} m)]
-    (case tag-name
-      :beginning-of-line (ast/new-beginning-of-line)
-      (:text :end-of-line) (ast/new-text (second v))
-      :whitespace (ast/new-whitespace (second v))
-      :alt-unescaped-tag (ast/new-unescaped-variable (drop 1 (second v)))
-      :comment-tag (ast/new-comment (second v))
-      :standard-tag
-      (let [[_ open [_ sigil] [_ & path] close] v]
-        (case sigil
-          "" (ast/new-escaped-variable path)
-          "&" (ast/new-unescaped-variable path)
-          "#" (ast/new-standard-section path)
-          "^" (ast/new-inverted-section path))))))
-
-(defn- tag-vec->ast-node [v]
-  (let [tag-name (first v)
-        {:keys [path] :as attrs} (into {} (rest v))
-        delimiters (set-)]
-    (case tag-name
-      :standard-tag
-      (case (:sigil attrs)
-        "" (ast/new-escaped-variable path )))))
 
 (defn- invisible-rightside-children-whitespaces [loc]
   (if (zip/down loc)
@@ -130,13 +109,15 @@ rest = #'(.|\\r?\\n)*$'"))
 
        (case (first elm)
          :standard-tag
-         (let [tag-name (first elm)
-               tag (into {} (rest elm))]
-           (case (:sigil tag)
+         (let [[_ [_ open] [_ sigil] [_ & path] [_ close]] elm
+               delimiters {:open open :close close}]
+           (case sigil
              ("#" "^") ;; open section
              (let [standalone? (and (:standalone? state) (= :end-of-line (ffirst parsed)))]
                (recur (-> (cond-> loc standalone? invisible-rightside-children-whitespaces)
-                          (zip/append-child (vec->ast-node ))
+                          (zip/append-child (if (= "#" sigil)
+                                              (ast/new-standard-section path delimiters)
+                                              (ast/new-inverted-section path delimiters)))
                           zip/down
                           zip/rightmost)
                       (cond->> parsed standalone? (drop 2)) ;; `drop 2` means remove EOL&BOL
@@ -147,7 +128,9 @@ rest = #'(.|\\r?\\n)*$'"))
              "/" ;; close secion
              (if (= (peek (:stack state)) path)
                (let [standalone? (and (:standalone? state) (= :end-of-line (ffirst parsed)))]
-                 (recur (-> (cond-> loc standalone? invisible-rightside-children-whitespaces) zip/up)
+                 (recur (-> (cond-> loc standalone? invisible-rightside-children-whitespaces)
+                            (zip/edit ast/set-close-tag-delimiters delimiters)
+                            zip/up)
                         (cond->> parsed standalone? (drop 2))
                         (-> state
                             (update :stack pop)
@@ -179,14 +162,23 @@ rest = #'(.|\\r?\\n)*$'"))
                       (cond->> parsed standalone? (drop 2))
                       state))
 
-             (recur (-> loc (zip/append-child (vec->ast-node elm)))
+             (recur (-> loc (zip/append-child (if (= "" sigil)
+                                                (ast/new-escaped-variable path delimiters)
+                                                (ast/new-unescaped-variable path delimiters))))
                     parsed
                     (assoc state :standalone? false))))
 
+         :alt-unescaped-tag
+         (let [[_ [_ open] _ [_ & path] _ [_ close]] elm
+               delimiters {:open open :close close}]
+           (recur (-> loc (zip/append-child (ast/new-unescaped-variable path delimiters)))
+                  parsed
+                  (assoc state :standalone? false)))
+
          :set-delimiter-tag
-         (let [[_ [_ open] [_ close] [_ rest-of-mustache]] elm
-               parser (gen-parser {:open open :close close})
-               parsed (->> (parse* rest-of-mustache {:parser parser})
+         (let [[_ _ [_ open] [_ close] _ [_ rest-of-mustache]] elm
+               delimiters {:open open :close close}
+               parsed (->> (parse* rest-of-mustache {:delimiters delimiters})
                            (drop 1) ;; don't need BOL
                            )
                standalone? (and (:standalone? state)
@@ -196,23 +188,24 @@ rest = #'(.|\\r?\\n)*$'"))
                   (assoc state :standalone? standalone?)))
 
          :comment-tag
-         (let [standalone? (and (:standalone? state) (= :end-of-line (ffirst parsed)))]
+         (let [standalone? (and (:standalone? state) (= :end-of-line (ffirst parsed)))
+               [_ _ comment-content _] elm]
            (recur (-> (cond-> loc standalone? invisible-rightside-children-whitespaces)
-                      (zip/append-child (vec->ast-node elm)))
+                      (zip/append-child (ast/new-comment comment-content)))
                   (cond->> parsed standalone? (drop 2))
                   (assoc state :standalone? standalone?)))
 
          :whitespace
-         (recur (-> loc (zip/append-child (vec->ast-node elm)))
+         (recur (-> loc (zip/append-child (ast/new-whitespace (second elm))))
                 parsed
                 ;; keep current state
                 state)
 
          :beginning-of-line
-         (recur (-> loc (zip/append-child (vec->ast-node elm)))
+         (recur (-> loc (zip/append-child (ast/new-beginning-of-line)))
                 parsed
                 (assoc state :standalone? true))
 
-         (recur (-> loc (zip/append-child (vec->ast-node elm)))
+         (recur (-> loc (zip/append-child (ast/new-text (second elm))))
                 parsed
                 (assoc state :standalone? false)))))))

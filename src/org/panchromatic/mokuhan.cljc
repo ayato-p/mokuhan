@@ -7,5 +7,6 @@
    (render mustache data {}))
 
   ([mustache data opts]
-   (-> (parser/parse mustache opts)
-       (renderer/render data (assoc opts :render #(render % data opts))))))
+   (let [render' (fn [& [opts']] #(render % data (merge opts opts')))]
+     (-> (parser/parse mustache opts)
+         (renderer/render data (assoc opts :render render'))))))
