@@ -4,11 +4,8 @@
             [instaparse.core :as insta]
             [org.panchromatic.mokuhan.ast :as ast]
             [org.panchromatic.mokuhan.util.misc :as misc]
-            [org.panchromatic.mokuhan.walker :as walker])
-  (:import java.util.regex.Pattern))
-
-(defn- re-quote [s]
-  (re-pattern (Pattern/quote (str s))))
+            [org.panchromatic.mokuhan.util.regex :as regex]
+            [org.panchromatic.mokuhan.walker :as walker]))
 
 ;;; {{name}}   -> variable
 ;;; {{{name}}} -> unescaped variable
@@ -31,27 +28,27 @@
 (defn generate-mustache-spec [{:keys [open close] :as delimiters}]
   (str "
 <mustache> = *(beginning-of-line *(text / whitespace / tag) end-of-line)
-beginning-of-line = <#'(?:^|\\A)'>
-end-of-line = #'(?:\\r?\\n|\\z)'
-text = !tag #'[^\\r\\n\\s]+?(?=(?:" (re-quote open)  "|\\r?\\n|\\s|\\z))'
+beginning-of-line = <#'(?:^" #?(:clj "|\\A") ")'>
+end-of-line = #'(?:\\r?\\n|" #?(:clj "\\z" :cljs "$") ")'
+text = !tag #'[^\\r\\n\\s]+?(?=(?:" (regex/source (regex/re-quote open))  "|\\r?\\n|\\s|" #?(:clj "\\z" :cljs "$") "))'
 whitespace = #'[^\\S\\r\\n]+'
 
-<ident> = #'(?!(?:\\!|\\=))[^\\s\\.]+?(?=\\s|\\.|" (re-quote close) ")'
+<ident> = #'(?!(?:\\!|\\=))[^\\s\\.]+?(?=\\s|\\.|" (regex/source (regex/re-quote close)) ")'
 path = (ident *(<'.'> ident) / #'\\.')
 
 <tag> = ( comment-tag / set-delimiter-tag / standard-tag / alt-unescaped-tag )
-tag-open = #'" (re-quote open) "'
-tag-close = #'" (re-quote close) "'
+tag-open = #'" (regex/source (regex/re-quote open)) "'
+tag-close = #'" (regex/source (regex/re-quote close)) "'
 standard-tag = tag-open sigil <*1 #'\\s+'> path <*1 #'\\s+'> tag-close
 sigil = #'(?:" (str/join "|" sigils) ")?'
 alt-unescaped-tag = tag-open #'\\{' <*1 #'\\s+'> path <*1 #'\\s+'> #'\\}' tag-close
 
 comment-tag = tag-open <#'!'> comment-content tag-close
-comment-content = #'(?:.|\\r?\\n)*?(?=" (re-quote close) ")'
+comment-content = #'(?:.|\\r?\\n)*?(?=" (regex/source (regex/re-quote close)) ")'
 
 set-delimiter-tag = tag-open <#'='> <*1 #'\\s+'> new-open-delimiter <*1 #'\\s+'> new-close-delimiter <*1 #'\\s+'> <#'='> tag-close rest
 new-open-delimiter = #'[^\\s]+'
-new-close-delimiter = #'[^\\s]+?(?=\\s*" (re-quote (str "=" close)) ")'
+new-close-delimiter = #'[^\\s]+?(?=\\s*" (regex/source (regex/re-quote (str "=" close))) ")'
 rest = #'(.|\\r?\\n)*$'"))
 
 (defn gen-parser [delimiters]

@@ -1,4 +1,5 @@
-(ns org.panchromatic.mokuhan.util.stringbuilder)
+(ns org.panchromatic.mokuhan.util.stringbuilder
+  #?(:cljs (:require [clojure.string :as str])))
 
 #?(:clj
    (defn new-string-builder []
@@ -6,8 +7,7 @@
 
    :cljs
    (defn new-string-builder []
-     ;; TODO
-     ))
+     (atom [])))
 
 #?(:clj
    (defn append [^StringBuilder sb ^String s]
@@ -15,8 +15,8 @@
 
    :cljs
    (defn append [sb s]
-     ;; TODO
-     ))
+     (swap! sb conj s)
+     sb))
 
 #?(:clj
    (defn to-string [^StringBuilder sb]
@@ -24,5 +24,4 @@
 
    :cljs
    (defn to-string [sb]
-     ;; TODO
-     ))
+     (str/join @sb)))

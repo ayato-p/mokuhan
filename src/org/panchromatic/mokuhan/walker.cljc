@@ -36,7 +36,7 @@
                             (proto/traverse %2))
                          x
                          path)]
-        (cond-> x (proto/found-key? x) (.value))
+        (cond-> x (proto/found-key? x) #?(:clj (.value) :cljs (.-value)))
         (recur candidates)))))
 
 (defn traverse

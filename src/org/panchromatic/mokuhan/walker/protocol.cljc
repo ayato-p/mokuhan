@@ -18,4 +18,6 @@
 
   FoundKey
   (traverse [fk path]
-    (traverse (.value fk) path)))
+    (traverse
+     #?(:clj (.value fk) :cljs (.-value fk))
+     path)))

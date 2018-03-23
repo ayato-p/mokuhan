@@ -9,7 +9,7 @@
   (make-node [this children]))
 
 (extend-protocol ASTZipper
-  Object
+  #?(:clj Object :cljs default)
   (branch? [this] false)
   (children [this] nil)
   (make-node [this children] nil))

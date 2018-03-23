@@ -3,9 +3,12 @@
             [org.panchromatic.mokuhan.renderer :as sut]
             [org.panchromatic.mokuhan.ast :as ast]))
 
+(def ^:private delimiters
+  {:open "{{" :close "}}"})
+
 (t/deftest render-escaped-variable-test
   (t/testing "Single path"
-    (let [v (ast/new-escaped-variable ["x"])]
+    (let [v (ast/new-escaped-variable ["x"] delimiters)]
       (t/testing "String"
         (t/is (= "Hi" (sut/render v {:x "Hi"}))))
 
@@ -35,7 +38,7 @@
         (t/is (= "" (sut/render v {}))))))
 
   (t/testing "Dotted path"
-    (let [v (ast/new-escaped-variable ["x" "y"])]
+    (let [v (ast/new-escaped-variable ["x" "y"] delimiters)]
       (t/testing "String"
         (t/is (= "Hi" (sut/render v {:x {:y "Hi"}}))))
 
@@ -62,18 +65,19 @@
         (t/is (= "" (sut/render v {:x {}}))))))
 
   (t/testing "Include index of list"
-    (let [v (ast/new-escaped-variable ["x" 1 "y"])]
+    (let [v (ast/new-escaped-variable ["x" 1 "y"] delimiters)]
       (t/is (= "42" (sut/render v {:x [{:y 41} {:y 42}]})))
 
       (t/is (= "" (sut/render v {:x [{:y 41}]})))))
 
   (t/testing "Dot"
-    (let [v (ast/new-escaped-variable ["."])]
+    (let [v (ast/new-escaped-variable ["."] delimiters)]
       (t/is (= "{:x 42}" (sut/render v {:x 42}))))))
 
 (t/deftest render-standard-section-test
   (t/testing "single path section"
-    (let [v (ast/new-standard-section ["x"] [(ast/new-text "!!")])]
+    (let [v (-> (ast/new-standard-section ["x"] delimiters)
+                (update :contents conj (ast/new-text "!!")))]
       (t/is (= "!!"
                (sut/render v {:x true})
                (sut/render v {:x {}})
@@ -92,7 +96,8 @@
       (t/is (= "Hello!!" (sut/render v {:x #(str "Hello" %)})))))
 
   (t/testing "dotted path section"
-    (let [v (ast/new-standard-section ["x" "y"] [(ast/new-text "!!")])]
+    (let [v (-> (ast/new-standard-section ["x" "y"] delimiters)
+                (update :contents conj (ast/new-text "!!")))]
       (t/is (= "!!"
                (sut/render v {:x {:y true}})
                (sut/render v {:x {:y {}}})
@@ -111,11 +116,9 @@
       (t/is (= "Hello!!" (sut/render v {:x {:y #(str "Hello" %)}})))))
 
   (t/testing "nested section"
-    (let [v (ast/new-standard-section
-             ["x"]
-             [(ast/new-standard-section
-               ["y"]
-               [(ast/new-text "!!")])])]
+    (let [v (-> (ast/new-standard-section ["x"] delimiters)
+                (update :contents conj (-> (ast/new-standard-section ["y"] delimiters)
+                                           (update :contents conj (ast/new-text "!!")))))]
       (t/is (= "!!" (sut/render v {:x {:y true}})))
       (t/is (= "!!!!" (sut/render v {:x {:y [1 1]}})))
       (t/is (= "!!!!!!!!" (sut/render v {:x [{:y [1 1]} {:y [1 1]}]})))
@@ -124,11 +127,9 @@
                (sut/render v {:x [{:y true} {:y false} {:y true}]})))))
 
   (t/testing "nested and don't use outer key"
-    (let [v (ast/new-mustache
-             [(ast/new-standard-section
-               ["x"]
-               [(ast/new-standard-section
-                 ["y"]
-                 [(ast/new-text "Hello")])])])]
+    (let [v (-> [(-> (ast/new-standard-section ["x"] delimiters)
+                     (update :contents conj (-> (ast/new-standard-section ["y"] delimiters)
+                                                (update :contents conj (ast/new-text "Hello")))))]
+                ast/new-mustache)]
       (t/is (= "" (sut/render v {:x [{:y false}]
                                  :y true}))))))

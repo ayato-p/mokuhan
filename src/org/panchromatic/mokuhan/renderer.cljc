@@ -12,6 +12,10 @@
 ;; don't remove platform ns via ns clean-up
 ::platform/require
 
+(defn- path [x]
+  #?(:clj (.path x)
+     :cljs (.-path x)))
+
 (defn- escape-html [s]
   (-> s
       (str/replace #"&" "&amp;")
@@ -35,7 +39,7 @@
   (render
     ([variable context state]
      (let [position (:position state)]
-       (-> (walker/traverse context (.path variable) position)
+       (-> (walker/traverse context (path variable) position)
            (proto/render context state)
            escape-html))))
 
@@ -43,22 +47,22 @@
   (render
     ([variable context state]
      (let [position (:position state)]
-       (-> (walker/traverse context (.path variable) position)
+       (-> (walker/traverse context (path variable) position)
            (proto/render context state)))))
 
   StandardSection
   (render [section context state]
-    (-> (walker/traverse context (.path section) (:position state))
+    (-> (walker/traverse context (path section) (:position state))
         (proto/render-section section context state)))
 
   InvertedSection
   (render [section context state]
-    (-> (walker/traverse context (.path section) (:position state))
+    (-> (walker/traverse context (path section) (:position state))
         (proto/render-inverted-section section context state))))
 
 (def ^:private initial-state
   {:position []
-   :render identity})
+   :render (constantly identity)})
 
 (defn render
   ([ast context]

@@ -9,3 +9,6 @@ pom.xml.asc
 /.nrepl-port
 .hgignore
 .hg/
+.cljs_rhino_repl
+.cljs_node_repl
+out

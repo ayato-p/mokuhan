@@ -10,14 +10,13 @@
   (render
     ([_ _ _] ""))
 
-  Object
+  #?(:clj Object :cljs default)
   (render
     ([o _ _] (.toString o))))
 
-
 (defn render-section-simply [section context state]
-  (let [path (.path section)
-        contents (.contents section)]
+  (let [path #?(:clj (.path section) :cljs (:path section))
+        contents #?(:clj (.contents section) :cljs (:contents section))]
     (->> contents
          (reduce (fn [sb ast]
                    (->> (update state :position conj path)
@@ -35,7 +34,7 @@
   (render-section [_ _ _ _]
     "")
 
-  Object
+  #?(:clj Object :cljs default)
   (render-section [o section context state]
     (if (misc/truthy? o)
       (render-section-simply section context state)
@@ -50,7 +49,7 @@
   (render-inverted-section [_ section context state]
     (render-section-simply section context state))
 
-  Object
+  #?(:clj Object :cljs default)
   (render-inverted-section [o section context state]
     (if-not (misc/truthy? o)
       (render-section-simply section context state)

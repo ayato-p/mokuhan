@@ -6,14 +6,14 @@
 (extend-type clojure.lang.AFunction
   proto/Rendable
   (render [f context state]
-    (let [render ((:render state))]
+    (let [render ((:render state identity))]
       (-> (f) (proto/render context state) render)))
 
   proto/StandardSectionRenderer
   (render-section [f section context state]
     ;; Temporary fix
     (let [delimiters (ast/get-open-tag-delimiters section)
-          render ((:render state){:delimiters delimiters})]
+          render ((:render state) {:delimiters delimiters})]
       (-> (ast/children section)
           (->> (reduce #(sb/append %1 (.toString %2)) (sb/new-string-builder)))
           sb/to-string
@@ -29,7 +29,7 @@
       (->> (for [idx (range (count l)) ast contents] [idx ast])
            (reduce (fn [sb [idx ast]]
                      (->> (-> state
-                              (update :position conj path [idx]))
+                              (update :position (fnil conj []) path [idx]))
                           (proto/render ast context)
                           (.append sb)))
                    (StringBuilder. 1024))
