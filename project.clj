@@ -1,4 +1,4 @@
-(defproject org.panchromatic/mokuhan "0.1.0-SNAPSHOT"
+(defproject org.panchromatic/mokuhan "0.1.0"
   :description "Yet another implementation of Mustache in Clojure."
   :url "https://github.com/ayato-p/mokuhan"
   :license {:name "MIT License"
