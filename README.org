@@ -1,12 +1,18 @@
-* Mokuhan (木版)
+* Mokuhan (木版) [[https://circleci.com/gh/ayato-p/mokuhan/tree/master][https://circleci.com/gh/ayato-p/mokuhan/tree/master.svg?style=svg]] [[https://opensource.org/licenses/MIT][https://img.shields.io/badge/License-MIT-blue.svg]]
 
 Mokuhan is yet another implementation of Mustache in Clojure.
+
+** Installation
+
+Add the following dependency to your =project.clj= or =deps.edn= file:
+
+[[https://clojars.org/org.panchromatic/mokuhan][https://img.shields.io/clojars/v/org.panchromatic/mokuhan.svg]]
 
 ** License
 
 MIT License
 
-Copyright (c) 2017 ayato-p
+Copyright (c) 2018 ayato-p
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
