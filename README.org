@@ -1,6 +1,6 @@
 * Mokuhan (木版) [[https://circleci.com/gh/ayato-p/mokuhan/tree/master][https://circleci.com/gh/ayato-p/mokuhan/tree/master.svg?style=svg]] [[https://opensource.org/licenses/MIT][https://img.shields.io/badge/License-MIT-blue.svg]]
 
-Mokuhan is yet another implementation of Mustache in Clojure.
+Mokuhan is yet another implementation of Mustache in Clojure/ClojureScript.
 
 ** Installation
 
