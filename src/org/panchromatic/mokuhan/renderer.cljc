@@ -24,7 +24,7 @@
       (str/replace #"\"" "&quot;")
       (str/replace #"'" "&#39;")))
 
-(extend-protocol proto/Rendable
+(extend-protocol proto/Renderable
   Mustache
   (render
     ([mustache context state]

@@ -2,10 +2,10 @@
   (:require [org.panchromatic.mokuhan.util.misc :as misc]
             [org.panchromatic.mokuhan.util.stringbuilder :as sb]))
 
-(defprotocol Rendable
+(defprotocol Renderable
   (render [this context state]))
 
-(extend-protocol Rendable
+(extend-protocol Renderable
   nil
   (render
     ([_ _ _] ""))

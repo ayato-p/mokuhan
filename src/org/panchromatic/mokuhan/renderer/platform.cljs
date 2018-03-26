@@ -4,7 +4,7 @@
             [org.panchromatic.mokuhan.util.stringbuilder :as sb]))
 
 (extend-type function
-  proto/Rendable
+  proto/Renderable
   (render [f data state]
     (let [render ((:render state identity))]
       (-> (f) (proto/render data state) render)))

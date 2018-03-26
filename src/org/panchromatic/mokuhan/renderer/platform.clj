@@ -4,7 +4,7 @@
             [org.panchromatic.mokuhan.util.stringbuilder :as sb]))
 
 (extend-type clojure.lang.AFunction
-  proto/Rendable
+  proto/Renderable
   (render [f context state]
     (let [render ((:render state identity))]
       (-> (f) (proto/render context state) render)))
